@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
 import { messageForError } from "../lib/errors";
-import { usernameToEmail } from "../lib/usernameEmail";
+import { normalizeEmail } from "../lib/email";
 
 type AuthScreenProps = {
   client: SupabaseClient;
@@ -11,7 +11,7 @@ type AuthScreenProps = {
 
 export function AuthScreen({ client }: AuthScreenProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -19,11 +19,11 @@ export function AuthScreen({ client }: AuthScreenProps) {
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    let email: string;
+    let normalizedEmail: string;
     try {
-      email = usernameToEmail(username);
+      normalizedEmail = normalizeEmail(email);
     } catch {
-      setError(es.invalidUsername);
+      setError(es.invalidEmail);
       return;
     }
     if (password.length < 6) {
@@ -32,7 +32,7 @@ export function AuthScreen({ client }: AuthScreenProps) {
     }
     setPending(true);
     if (mode === "register") {
-      const { data, error: signUpError } = await client.auth.signUp({ email, password });
+      const { data, error: signUpError } = await client.auth.signUp({ email: normalizedEmail, password });
       setPending(false);
       if (signUpError) {
         setError(messageForError(signUpError));
@@ -43,7 +43,7 @@ export function AuthScreen({ client }: AuthScreenProps) {
       }
       return;
     }
-    const { error: signInError } = await client.auth.signInWithPassword({ email, password });
+    const { error: signInError } = await client.auth.signInWithPassword({ email: normalizedEmail, password });
     setPending(false);
     if (signInError) {
       setError(messageForError(signInError));
@@ -56,11 +56,13 @@ export function AuthScreen({ client }: AuthScreenProps) {
       <LocalBanner />
       <form className="card stack" onSubmit={submit}>
         <label>
-          {es.username}
+          {es.email}
           <input
-            autoComplete="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
           />
         </label>
         <label>

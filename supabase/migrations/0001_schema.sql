@@ -12,7 +12,7 @@ end $$;
 
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  username text not null unique check (username ~ '^[a-z0-9_]{3,32}$'),
+  email text not null unique check (email ~* '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'),
   created_at timestamptz not null default now()
 );
 
@@ -88,8 +88,8 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, username)
-  values (new.id, split_part(new.email, '@', 1))
+  insert into public.profiles (id, email)
+  values (new.id, lower(new.email))
   on conflict (id) do nothing;
   return new;
 end;

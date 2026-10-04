@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { usernameToEmail } from "./usernameEmail";
 import { createLocalClient } from "./localClient";
 
 function memoryStorage() {
@@ -15,8 +14,7 @@ function memoryStorage() {
 describe("local client", () => {
   it("creates a family, stores a feed, and rejects a second open feed", async () => {
     const client = createLocalClient(memoryStorage());
-    const email = usernameToEmail("Mama");
-    const signUp = await client.auth.signUp({ email, password: "secret1" });
+    const signUp = await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
     expect(signUp.error).toBeNull();
 
     const created = await client.rpc("bootstrap_household");
@@ -46,7 +44,7 @@ describe("local client", () => {
   it("lets a second user join with the invite code", async () => {
     const storage = memoryStorage();
     const owner = createLocalClient(storage);
-    await owner.auth.signUp({ email: usernameToEmail("mama"), password: "secret1" });
+    await owner.auth.signUp({ email: "mama@example.com", password: "secret1" });
     const household = await owner.rpc("bootstrap_household");
     const invite = await owner
       .from("invites")
@@ -57,7 +55,7 @@ describe("local client", () => {
     await owner.auth.signOut();
 
     const partner = createLocalClient(storage);
-    await partner.auth.signUp({ email: usernameToEmail("papa"), password: "secret2" });
+    await partner.auth.signUp({ email: "papa@example.com", password: "secret2" });
     const joined = await partner.rpc("join_household", { p_code: (invite.data as { code: string }).code });
     expect(joined.error).toBeNull();
     expect(joined.data).toBe(household.data);

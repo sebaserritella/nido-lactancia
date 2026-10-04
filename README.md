@@ -21,7 +21,7 @@ npm test
 npm run dev
 ```
 
-El usuario se escribe sin `@`. Por dentro la cuenta es `usuario@nido-lactancia.local`. La contraseña la guarda Supabase, hasheada. No hay email real, así que recuperar la clave se hace desde el dashboard de Supabase (Authentication → Users).
+La cuenta es un correo real y una contraseña. Supabase guarda la contraseña hasheada. Un apodo, sin `@`, no se puede registrar.
 
 La primera persona elige **Crear familia** y le pasa el código a la otra. La segunda se registra y elige **Tengo un código**.
 

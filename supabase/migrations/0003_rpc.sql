@@ -5,8 +5,8 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, username)
-  select users.id, split_part(users.email, '@', 1)
+  insert into public.profiles (id, email)
+  select users.id, lower(users.email)
   from auth.users
   where users.id = auth.uid()
   on conflict (id) do nothing;
