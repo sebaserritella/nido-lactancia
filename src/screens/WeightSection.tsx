@@ -90,7 +90,7 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
   }
 
   async function remove(id: string) {
-    if (!window.confirm(es.confirmDeleteEntry)) return;
+    if (!window.confirm(es.confirmDeleteWeight)) return;
     setError(null);
     const { error: deleteError } = await client.from("weights").delete().eq("id", id);
     if (deleteError) {
@@ -137,10 +137,10 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
             </div>
             <div className="row-actions">
               <button type="button" className="ghost" onClick={() => setEditingId(weight.id)}>
-                {es.edit}
+                {es.editWeight}
               </button>
               <button type="button" className="ghost" onClick={() => remove(weight.id)}>
-                {es.delete}
+                {es.deleteWeight}
               </button>
             </div>
             {editingId === weight.id ? (

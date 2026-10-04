@@ -160,12 +160,12 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   }
 
   async function removeFeed(id: string) {
-    if (!window.confirm(es.confirmDeleteEntry)) return;
+    if (!window.confirm(es.confirmDeleteFeed)) return;
     await run(() => client.from("feeds").delete().eq("id", id));
   }
 
   async function removeDiaper(id: string) {
-    if (!window.confirm(es.confirmDeleteEntry)) return;
+    if (!window.confirm(es.confirmDeleteDiaper)) return;
     await run(() => client.from("diapers").delete().eq("id", id));
   }
 
@@ -273,10 +273,10 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
               </div>
               <div className="row-actions">
                 <button type="button" className="ghost" onClick={() => setEditing(feed)}>
-                  {es.edit}
+                  {es.editFeed}
                 </button>
                 <button type="button" className="ghost" onClick={() => removeFeed(feed.id)}>
-                  {es.delete}
+                  {es.deleteFeed}
                 </button>
               </div>
               {editing?.id === feed.id ? (
@@ -311,10 +311,10 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
               </div>
               <div className="row-actions">
                 <button type="button" className="ghost" onClick={() => setEditingDiaper(diaper)}>
-                  {es.edit}
+                  {es.editDiaper}
                 </button>
                 <button type="button" className="ghost" onClick={() => removeDiaper(diaper.id)}>
-                  {es.delete}
+                  {es.deleteDiaper}
                 </button>
               </div>
               {editingDiaper?.id === diaper.id ? (

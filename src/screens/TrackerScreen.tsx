@@ -205,16 +205,9 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
 
   const selected = babies.find((baby) => baby.id === selectedId) ?? null;
 
-  return (
-    <main className="shell">
-      <header className="topbar">
-        <h1>{es.appName}</h1>
-        <button type="button" className="ghost" onClick={onSignOut}>
-          {es.signOut}
-        </button>
-      </header>
-      <LocalBanner />
-      <form className="card stack" onSubmit={addBaby}>
+  function addBabyForm(className: string) {
+    return (
+      <form className={className} onSubmit={addBaby}>
         <label>
           {es.babyName}
           <input
@@ -237,6 +230,18 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
         </label>
         <button type="submit">{es.addBaby}</button>
       </form>
+    );
+  }
+
+  return (
+    <main className="shell">
+      <header className="topbar">
+        <h1>{es.appName}</h1>
+        <button type="button" className="ghost" onClick={onSignOut}>
+          {es.signOut}
+        </button>
+      </header>
+      <LocalBanner />
       {babies.length > 0 ? (
         <div className="choice">
           {babies.map((baby) => {
@@ -260,7 +265,10 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
           })}
         </div>
       ) : (
-        <p className="muted">{es.noBabies}</p>
+        <>
+          <p className="muted">{es.noBabies}</p>
+          {addBabyForm("card stack")}
+        </>
       )}
       {selected && editingBaby ? (
         <form className="card stack" onSubmit={saveBaby}>
@@ -285,10 +293,10 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       ) : selected ? (
         <div className="row-actions">
           <button type="button" className="ghost" onClick={() => startEdit(selected)}>
-            {es.rename}
+            {es.renameBaby}
           </button>
           <button type="button" className="ghost" onClick={() => remove(selected)}>
-            {es.delete}
+            {es.deleteBaby}
           </button>
         </div>
       ) : null}
@@ -334,6 +342,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
             <button type="button" className="ghost" onClick={() => void newInvite()}>
               {es.inviteAgain}
             </button>
+            {babies.length > 0 ? addBabyForm("stack") : null}
           </section>
         ) : null}
       </div>
