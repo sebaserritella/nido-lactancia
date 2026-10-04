@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DiaperIcon, FeedIcon } from "../components/EventIcons";
-import { SharePie } from "../components/SharePie";
+import { TimeBars, type BarSegment } from "../components/TimeBars";
 import type { Baby, Diaper, Feed, RangeStats } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { formatMinutes, formatStat } from "../lib/format";
 import { addCalendarDays, localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue } from "../lib/localTime";
 import { messageForError } from "../lib/errors";
-import { summarizePeriod, type StatGrain } from "../lib/periodStats";
+import { shiftRange, summarizePeriod, type PeriodBucket, type StatGrain } from "../lib/periodStats";
 
 type HistoryPanelProps = {
   client: SupabaseClient;
@@ -72,6 +72,12 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
     };
   }, [baby.id, client, from, timeZone, to]);
 
+  function moveRange(direction: -1 | 1) {
+    const next = shiftRange(from, to, direction);
+    setFrom(next.from);
+    setTo(next.to);
+  }
+
   const days = new Map<string, { feeds: Feed[]; diapers: Diaper[] }>();
   for (const feed of feeds) {
     const day = todayLocalDate(timeZone, new Date(feed.started_at));
@@ -118,7 +124,20 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
           <p className="muted">{es.statsNote}</p>
         </section>
       ) : null}
-      {!loading && !error ? <PeriodCharts feeds={feeds} diapers={diapers} babyId={baby.id} from={from} to={to} timeZone={timeZone} grain={grain} /> : null}
+      {!loading && !error ? (
+        <PeriodCharts
+          feeds={feeds}
+          diapers={diapers}
+          babyId={baby.id}
+          from={from}
+          to={to}
+          timeZone={timeZone}
+          grain={grain}
+          onPrevious={() => moveRange(-1)}
+          onNext={() => moveRange(1)}
+          nextDisabled={to >= today}
+        />
+      ) : null}
       {loading ? <p className="muted">{es.loading}</p> : null}
       {days.size === 0 && !error && !loading ? <p className="muted">{es.emptyRange}</p> : null}
       {[...days.entries()]
@@ -201,6 +220,9 @@ function PeriodCharts({
   to,
   timeZone,
   grain,
+  onPrevious,
+  onNext,
+  nextDisabled,
 }: {
   feeds: Feed[];
   diapers: Diaper[];
@@ -209,6 +231,9 @@ function PeriodCharts({
   to: string;
   timeZone: string;
   grain: StatGrain;
+  onPrevious: () => void;
+  onNext: () => void;
+  nextDisabled: boolean;
 }) {
   const period = summarizePeriod(feeds, diapers, babyId, from, to, timeZone, grain);
   const minutesTitle = grain === "week" ? es.minutesPerWeek : grain === "month" ? es.minutesPerMonth : es.minutesPerDay;
@@ -218,27 +243,69 @@ function PeriodCharts({
     <>
       <section className="card stack">
         <Stat label={minutesTitle} value={formatMinutes(period.minutesPerPeriod)} />
-        <SharePie
-          portions={period.sidePortions}
-          labelFor={(key) => sideLabel(key === "pee" || key === "poop" ? "both" : key)}
-          valueFor={(portion) => formatMinutes(portion.perPeriod) ?? es.noData}
+        <TimeBars
+          buckets={period.buckets}
+          grain={grain}
+          segmentsFor={feedSegments}
+          formatTick={(value) => formatStat(value) ?? "0"}
+          legend={feedLegend}
+          onPrevious={onPrevious}
+          onNext={onNext}
+          nextDisabled={nextDisabled}
+          previousLabel={es.previousPeriod}
+          nextLabel={es.nextPeriod}
         />
       </section>
       <section className="card stack">
         <Stat label={diapersTitle} value={formatStat(period.diapersPerPeriod)} />
-        <SharePie
-          portions={period.diaperPortions}
-          labelFor={(key) => diaperLabel(key === "left" || key === "right" ? "both" : key)}
-          valueFor={(portion) => formatStat(portion.perPeriod) ?? es.noData}
+        <TimeBars
+          buckets={period.buckets}
+          grain={grain}
+          segmentsFor={diaperSegments}
+          formatTick={(value) => formatStat(value) ?? "0"}
+          legend={diaperLegend}
+          onPrevious={onPrevious}
+          onNext={onNext}
+          nextDisabled={nextDisabled}
+          previousLabel={es.previousPeriod}
+          nextLabel={es.nextPeriod}
         />
       </section>
     </>
   );
 }
 
+const feedLegend: BarSegment[] = [
+  { key: "left", label: es.left, value: 0, color: "#9c3d2e" },
+  { key: "right", label: es.right, value: 0, color: "#2f6f62" },
+  { key: "both", label: es.both, value: 0, color: "#c4a15a" },
+];
+
+const diaperLegend: BarSegment[] = [
+  { key: "pee", label: es.pee, value: 0, color: "#3d6f9c" },
+  { key: "poop", label: es.poop, value: 0, color: "#8a5a3a" },
+  { key: "both", label: es.both, value: 0, color: "#6d5a8a" },
+];
+
+function feedSegments(bucket: PeriodBucket): BarSegment[] {
+  return [
+    { key: "left", label: es.left, value: bucket.leftMinutes, color: "#9c3d2e" },
+    { key: "right", label: es.right, value: bucket.rightMinutes, color: "#2f6f62" },
+    { key: "both", label: es.both, value: bucket.bothSideMinutes, color: "#c4a15a" },
+  ];
+}
+
+function diaperSegments(bucket: PeriodBucket): BarSegment[] {
+  return [
+    { key: "pee", label: es.pee, value: bucket.pee, color: "#3d6f9c" },
+    { key: "poop", label: es.poop, value: bucket.poop, color: "#8a5a3a" },
+    { key: "both", label: es.both, value: bucket.bothDiapers, color: "#6d5a8a" },
+  ];
+}
+
 function Stat({ label, value }: { label: string; value: string | null }) {
   return (
-    <p>
+    <p className="stat-line">
       <span className="muted">{label}</span>
       <strong>{value ?? es.noData}</strong>
     </p>

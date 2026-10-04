@@ -92,6 +92,8 @@ export const es = {
   noDiapersYet: "Todavía no hay pañales.",
   from: "Desde",
   to: "Hasta",
+  previousPeriod: "Anterior",
+  nextPeriod: "Siguiente",
   grain: "Agrupar",
   grainDay: "Día",
   grainWeek: "Semana",

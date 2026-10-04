@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizePeriod } from "./periodStats";
+import { shiftRange, summarizePeriod } from "./periodStats";
 
 const babyId = "22222222-2222-2222-2222-222222222222";
 const zone = "America/Argentina/Buenos_Aires";
@@ -38,6 +38,11 @@ describe("summarizePeriod", () => {
     expect(stats.diaperPortions[0].share).toBeCloseTo(2 / 3);
     expect(stats.diaperPortions[1].total).toBe(1);
     expect(stats.diaperPortions[1].share).toBeCloseTo(1 / 3);
+
+    expect(stats.buckets.map((bucket) => bucket.key)).toEqual(["2026-10-01", "2026-10-02", "2026-10-03"]);
+    expect(stats.buckets[0]).toMatchObject({ leftMinutes: 18, rightMinutes: 20, bothSideMinutes: 0, pee: 1, poop: 0, bothDiapers: 0 });
+    expect(stats.buckets[1]).toMatchObject({ leftMinutes: 0, rightMinutes: 0, bothSideMinutes: 0, pee: 1, bothDiapers: 0 });
+    expect(stats.buckets[2]).toMatchObject({ leftMinutes: 0, pee: 0, bothDiapers: 1 });
   });
 
   it("uses one week and one month when the recorded days share them", () => {
@@ -53,6 +58,9 @@ describe("summarizePeriod", () => {
     expect(month.feedPeriodCount).toBe(1);
     expect(month.minutesPerPeriod).toBeCloseTo(38);
     expect(month.diapersPerPeriod).toBeCloseTo(3);
+    expect(week.buckets.map((bucket) => bucket.key)).toEqual(["2026-09-28"]);
+    expect(week.buckets[0]).toMatchObject({ leftMinutes: 18, rightMinutes: 20, pee: 2, bothDiapers: 1 });
+    expect(month.buckets.map((bucket) => bucket.key)).toEqual(["2026-10"]);
   });
 
   it("splits weeks on Monday and months on the first", () => {
@@ -89,5 +97,12 @@ describe("summarizePeriod", () => {
     const empty = summarizePeriod([], [], babyId, "2026-10-01", "2026-10-03", zone, "month");
     expect(empty.minutesPerPeriod).toBeNull();
     expect(empty.diapersPerPeriod).toBeNull();
+    expect(empty.buckets.map((bucket) => bucket.key)).toEqual(["2026-10"]);
+    expect(empty.buckets[0]).toMatchObject({ leftMinutes: 0, pee: 0 });
+  });
+
+  it("slides the date window by its own length", () => {
+    expect(shiftRange("2026-10-01", "2026-10-03", -1)).toEqual({ from: "2026-09-28", to: "2026-09-30" });
+    expect(shiftRange("2026-10-01", "2026-10-03", 1)).toEqual({ from: "2026-10-04", to: "2026-10-06" });
   });
 });

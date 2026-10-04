@@ -1,5 +1,5 @@
 import type { DiaperKind, FeedSide } from "../domain";
-import { todayLocalDate } from "./localTime";
+import { addCalendarDays, todayLocalDate } from "./localTime";
 
 export type StatGrain = "day" | "week" | "month";
 
@@ -10,6 +10,16 @@ export type Portion = {
   share: number;
 };
 
+export type PeriodBucket = {
+  key: string;
+  leftMinutes: number;
+  rightMinutes: number;
+  bothSideMinutes: number;
+  pee: number;
+  poop: number;
+  bothDiapers: number;
+};
+
 export type PeriodStats = {
   grain: StatGrain;
   feedPeriodCount: number;
@@ -18,6 +28,7 @@ export type PeriodStats = {
   diaperPeriodCount: number;
   diapersPerPeriod: number | null;
   diaperPortions: Portion[];
+  buckets: PeriodBucket[];
 };
 
 type FeedPoint = {
@@ -79,7 +90,14 @@ export function summarizePeriod(
     diaperPeriodCount: diaperPeriods.size,
     diapersPerPeriod: rate(diaperPortions, diaperPeriods.size),
     diaperPortions,
+    buckets: buildBuckets(completed, rangedDiapers, from, to, timeZone, grain),
   };
+}
+
+export function shiftRange(from: string, to: string, direction: -1 | 1): { from: string; to: string } {
+  const span = inclusiveDayCount(from, to);
+  const delta = direction * span;
+  return { from: addCalendarDays(from, delta), to: addCalendarDays(to, delta) };
 }
 
 function portions<Key extends Portion["key"]>(order: Key[], totals: Map<Key, number>, periodCount: number): Portion[] {
@@ -115,6 +133,72 @@ function periodKey(localDate: string, grain: StatGrain): string {
   const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
   utc.setUTCDate(utc.getUTCDate() + mondayOffset);
   return utc.toISOString().slice(0, 10);
+}
+
+function buildBuckets(
+  feeds: FeedPoint[],
+  diapers: DiaperPoint[],
+  from: string,
+  to: string,
+  timeZone: string,
+  grain: StatGrain,
+): PeriodBucket[] {
+  const keys = periodKeysInRange(from, to, grain);
+  const byKey = new Map(keys.map((key) => [key, emptyBucket(key)]));
+  for (const feed of feeds) {
+    const bucket = byKey.get(periodKey(localDay(feed.started_at, timeZone), grain));
+    if (!bucket || feed.ended_at === null) continue;
+    const minutes = (new Date(feed.ended_at).getTime() - new Date(feed.started_at).getTime()) / 60000;
+    if (feed.side === "left") bucket.leftMinutes += minutes;
+    else if (feed.side === "right") bucket.rightMinutes += minutes;
+    else bucket.bothSideMinutes += minutes;
+  }
+  for (const diaper of diapers) {
+    const bucket = byKey.get(periodKey(localDay(diaper.occurred_at, timeZone), grain));
+    if (!bucket) continue;
+    if (diaper.kind === "pee") bucket.pee += 1;
+    else if (diaper.kind === "poop") bucket.poop += 1;
+    else bucket.bothDiapers += 1;
+  }
+  return keys.map((key) => byKey.get(key) ?? emptyBucket(key));
+}
+
+function emptyBucket(key: string): PeriodBucket {
+  return { key, leftMinutes: 0, rightMinutes: 0, bothSideMinutes: 0, pee: 0, poop: 0, bothDiapers: 0 };
+}
+
+function periodKeysInRange(from: string, to: string, grain: StatGrain): string[] {
+  if (grain === "month") {
+    const keys: string[] = [];
+    let cursor = from.slice(0, 7);
+    const end = to.slice(0, 7);
+    while (cursor <= end) {
+      keys.push(cursor);
+      cursor = nextMonth(cursor);
+    }
+    return keys;
+  }
+  const start = grain === "week" ? periodKey(from, "week") : from;
+  const end = grain === "week" ? periodKey(to, "week") : to;
+  const step = grain === "week" ? 7 : 1;
+  const keys: string[] = [];
+  for (let day = start; day <= end; day = addCalendarDays(day, step)) {
+    keys.push(day);
+  }
+  return keys;
+}
+
+function nextMonth(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  date.setUTCMonth(date.getUTCMonth() + 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function inclusiveDayCount(from: string, to: string): number {
+  const [fromYear, fromMonth, fromDay] = from.split("-").map(Number);
+  const [toYear, toMonth, toDay] = to.split("-").map(Number);
+  return Math.round((Date.UTC(toYear, toMonth - 1, toDay) - Date.UTC(fromYear, fromMonth - 1, fromDay)) / 86_400_000) + 1;
 }
 
 function localDay(isoUtc: string, timeZone: string): string {
