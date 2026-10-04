@@ -4,6 +4,7 @@ import type { Baby } from "../domain";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
 import { birthDateIssue, formatBabyAge, formatCalendarDate } from "../lib/age";
+import { normalizeEmail } from "../lib/email";
 import { messageForError } from "../lib/errors";
 import { todayLocalDate } from "../lib/localTime";
 import { HistoryPanel } from "./HistoryPanel";
@@ -29,9 +30,11 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
   const [editingBaby, setEditingBaby] = useState(false);
   const [editName, setEditName] = useState("");
   const [editBornOn, setEditBornOn] = useState("");
-  const [invite, setInvite] = useState<string | null>(null);
   const [familyOpen, setFamilyOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [relativeEmail, setRelativeEmail] = useState("");
+  const [invitePending, setInvitePending] = useState(false);
+  const [inviteSent, setInviteSent] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,26 +88,6 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     if (selectedId) localStorage.setItem(babyStorageKey, selectedId);
     setEditingBaby(false);
   }, [selectedId]);
-
-  useEffect(() => {
-    let ignore = false;
-    async function loadInvite() {
-      const { data } = await client
-        .from("invites")
-        .select("code")
-        .eq("household_id", householdId)
-        .is("redeemed_at", null)
-        .gt("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (!ignore) setInvite(data?.code ?? null);
-    }
-    void loadInvite();
-    return () => {
-      ignore = true;
-    };
-  }, [client, householdId]);
 
   async function addBaby(event: FormEvent) {
     event.preventDefault();
@@ -183,24 +166,26 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     setSelectedId((current) => (current === baby.id ? null : current));
   }
 
-  async function newInvite() {
-    const { data, error: inviteError } = await client.rpc("create_invite");
-    if (inviteError || typeof data !== "string") {
-      setError(messageForError(inviteError ?? { message: "" }));
+  async function inviteRelative(event: FormEvent) {
+    event.preventDefault();
+    setInviteError(null);
+    setInviteSent(false);
+    let email: string;
+    try {
+      email = normalizeEmail(relativeEmail);
+    } catch {
+      setInviteError(es.invalidEmail);
       return;
     }
-    setInvite(data);
-    setCopied(false);
-  }
-
-  async function copyInvite() {
-    if (!invite) return;
-    try {
-      await navigator.clipboard.writeText(invite);
-      setCopied(true);
-    } catch {
-      setCopied(false);
+    setInvitePending(true);
+    const { error: sendError } = await client.rpc("invite_by_email", { p_email: email });
+    setInvitePending(false);
+    if (sendError) {
+      setInviteError(messageForError(sendError));
+      return;
     }
+    setRelativeEmail("");
+    setInviteSent(true);
   }
 
   const selected = babies.find((baby) => baby.id === selectedId) ?? null;
@@ -332,16 +317,27 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
         {familyOpen ? (
           <section className="card stack">
             <h2>{es.inviteTitle}</h2>
-            <p className="muted">{es.inviteHelp}</p>
-            {invite ? <p className="code">{invite}</p> : null}
-            {invite ? (
-              <button type="button" className="ghost" onClick={() => void copyInvite()}>
-                {copied ? es.copied : es.copy}
+            <form className="stack" onSubmit={(event) => void inviteRelative(event)}>
+              <label>
+                {es.relativeEmail}
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={relativeEmail}
+                  onChange={(event) => {
+                    setRelativeEmail(event.target.value);
+                    setInviteSent(false);
+                  }}
+                />
+              </label>
+              <p className="muted">{es.inviteHelp}</p>
+              <button type="submit" disabled={invitePending || relativeEmail.trim() === ""}>
+                {es.inviteTitle}
               </button>
-            ) : null}
-            <button type="button" className="ghost" onClick={() => void newInvite()}>
-              {es.inviteAgain}
-            </button>
+            </form>
+            {inviteSent ? <p>{es.inviteSent}</p> : null}
+            {inviteError ? <p className="error">{inviteError}</p> : null}
             {babies.length > 0 ? addBabyForm("stack") : null}
           </section>
         ) : null}

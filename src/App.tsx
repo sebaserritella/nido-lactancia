@@ -53,18 +53,41 @@ export function App() {
       setHouseholdReady(true);
       return;
     }
+    const userId = session.user.id;
     let ignore = false;
     setHouseholdReady(false);
-    void client
-      .from("household_members")
-      .select("household_id")
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (ignore) return;
-        setHouseholdError(error?.message ?? null);
-        setHouseholdId(data?.household_id ?? null);
+    void (async () => {
+      const existing = await client
+        .from("household_members")
+        .select("household_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (ignore) return;
+      if (existing.data?.household_id) {
+        setHouseholdError(null);
+        setHouseholdId(existing.data.household_id);
         setHouseholdReady(true);
-      });
+        void client.rpc("accept_email_invite");
+        return;
+      }
+      const accepted = await client.rpc("accept_email_invite");
+      if (ignore) return;
+      if (!accepted.error && typeof accepted.data === "string") {
+        setHouseholdError(null);
+        setHouseholdId(accepted.data);
+        setHouseholdReady(true);
+        return;
+      }
+      const { data, error } = await client
+        .from("household_members")
+        .select("household_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (ignore) return;
+      setHouseholdError(error?.message ?? null);
+      setHouseholdId(data?.household_id ?? null);
+      setHouseholdReady(true);
+    })();
     return () => {
       ignore = true;
     };
@@ -101,6 +124,7 @@ export function App() {
           void client
             .from("household_members")
             .select("household_id")
+            .eq("user_id", session.user.id)
             .maybeSingle()
             .then(({ data }) => setHouseholdId(data?.household_id ?? null));
         }}

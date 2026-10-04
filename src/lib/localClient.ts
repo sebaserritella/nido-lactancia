@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DiaperKind, FeedSide } from "../domain";
 import { computeRangeStats } from "./computeRangeStats";
+import { normalizeEmail } from "./email";
 
 const storageKey = "nido-lactancia.local-db";
 
@@ -23,6 +24,13 @@ type InviteRow = {
   expires_at: string;
   redeemed_by: string | null;
   redeemed_at: string | null;
+  created_at: string;
+};
+
+type EmailInviteRow = {
+  household_id: string;
+  email: string;
+  invited_by: string;
   created_at: string;
 };
 
@@ -68,6 +76,7 @@ type Database = {
   users: UserRow[];
   members: MemberRow[];
   invites: InviteRow[];
+  emailInvites: EmailInviteRow[];
   babies: BabyRow[];
   feeds: FeedRow[];
   diapers: DiaperRow[];
@@ -90,6 +99,7 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       users: parsed.users ?? [],
       members: parsed.members ?? [],
       invites: parsed.invites ?? [],
+      emailInvites: parsed.emailInvites ?? [],
       babies: (parsed.babies ?? []).map((baby) => ({ ...baby, born_on: baby.born_on ?? null })),
       feeds: parsed.feeds ?? [],
       diapers: parsed.diapers ?? [],
@@ -127,11 +137,13 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       },
       async signUp({ email, password }: { email: string; password: string }) {
         const db = load();
-        if (db.users.some((user) => user.email === email)) {
+        const normalized = email.trim().toLowerCase();
+        if (db.users.some((user) => user.email === normalized)) {
           return { data: { session: null }, error: { message: "User already registered" } };
         }
-        const user = { id: crypto.randomUUID(), email, passwordHash: await hashPassword(password) };
+        const user = { id: crypto.randomUUID(), email: normalized, passwordHash: await hashPassword(password) };
         db.users.push(user);
+        acceptNewestEmailInvite(db, user.id, normalized);
         db.sessionUserId = user.id;
         save(db);
         notify();
@@ -139,7 +151,8 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       },
       async signInWithPassword({ email, password }: { email: string; password: string }) {
         const db = load();
-        const user = db.users.find((item) => item.email === email);
+        const normalized = email.trim().toLowerCase();
+        const user = db.users.find((item) => item.email.toLowerCase() === normalized);
         if (!user || user.passwordHash !== (await hashPassword(password))) {
           return { data: { session: null }, error: { message: "Invalid login credentials" } };
         }
@@ -194,6 +207,53 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
           db.members.push({ household_id: invite.household_id, user_id: userId, created_at: invite.redeemed_at });
           save(db);
           return { data: invite.household_id, error: null };
+        }
+        if (name === "invite_by_email") {
+          const email = normalizeEmail(args.p_email ?? "");
+          const member = db.members.find((item) => item.user_id === userId);
+          if (!member) return { data: null, error: { message: "not in a household" } };
+          const target = db.users.find((user) => user.email === email);
+          if (target) {
+            const targetMember = db.members.find((item) => item.user_id === target.id);
+            if (targetMember?.household_id === member.household_id) {
+              return { data: null, error: null };
+            }
+            if (targetMember) return { data: null, error: { message: "already in a household" } };
+            db.members.push({
+              household_id: member.household_id,
+              user_id: target.id,
+              created_at: new Date().toISOString(),
+            });
+            db.emailInvites = db.emailInvites.filter(
+              (invite) => !(invite.household_id === member.household_id && invite.email === email),
+            );
+            save(db);
+            return { data: null, error: null };
+          }
+          const now = new Date().toISOString();
+          const existing = db.emailInvites.find(
+            (invite) => invite.household_id === member.household_id && invite.email === email,
+          );
+          if (existing) {
+            existing.invited_by = userId;
+            existing.created_at = now;
+          } else {
+            db.emailInvites.push({
+              household_id: member.household_id,
+              email,
+              invited_by: userId,
+              created_at: now,
+            });
+          }
+          save(db);
+          return { data: null, error: null };
+        }
+        if (name === "accept_email_invite") {
+          const user = db.users.find((item) => item.id === userId);
+          if (!user) return { data: null, error: { message: "not authenticated" } };
+          const householdId = acceptNewestEmailInvite(db, userId, user.email);
+          save(db);
+          return { data: householdId, error: null };
         }
         if (name === "create_invite") {
           const member = db.members.find((item) => item.user_id === userId);
@@ -420,13 +480,43 @@ class Query {
   }
 }
 
+function acceptNewestEmailInvite(db: Database, userId: string, email: string): string | null {
+  const existing = db.members.find((member) => member.user_id === userId);
+  if (existing) return existing.household_id;
+  const pending = db.emailInvites
+    .filter((invite) => invite.email === email)
+    .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  const newest = pending[0];
+  if (!newest) return null;
+  db.members.push({
+    household_id: newest.household_id,
+    user_id: userId,
+    created_at: new Date().toISOString(),
+  });
+  db.emailInvites = db.emailInvites.filter(
+    (invite) => !(invite.household_id === newest.household_id && invite.email === newest.email),
+  );
+  return newest.household_id;
+}
+
 function emptyDatabase(): Database {
-  return { users: [], members: [], invites: [], babies: [], feeds: [], diapers: [], weights: [], sessionUserId: null };
+  return {
+    users: [],
+    members: [],
+    invites: [],
+    emailInvites: [],
+    babies: [],
+    feeds: [],
+    diapers: [],
+    weights: [],
+    sessionUserId: null,
+  };
 }
 
 function rowsOf(db: Database, table: string): Row[] {
   if (table === "household_members") return db.members as unknown as Row[];
   if (table === "invites") return db.invites as unknown as Row[];
+  if (table === "email_invites") return db.emailInvites as unknown as Row[];
   if (table === "babies") return db.babies as unknown as Row[];
   if (table === "feeds") return db.feeds as unknown as Row[];
   if (table === "diapers") return db.diapers as unknown as Row[];
@@ -440,6 +530,7 @@ function replaceRows(db: Database, table: string, rows: Row[]) {
   if (table === "diapers") db.diapers = rows as unknown as DiaperRow[];
   if (table === "weights") db.weights = rows as unknown as WeightRow[];
   if (table === "invites") db.invites = rows as unknown as InviteRow[];
+  if (table === "email_invites") db.emailInvites = rows as unknown as EmailInviteRow[];
   if (table === "household_members") db.members = rows as unknown as MemberRow[];
 }
 

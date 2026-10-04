@@ -41,6 +41,52 @@ describe("local client", () => {
     expect(second.error?.code).toBe("23505");
   });
 
+  it("invites an existing user by email and joins a later signup", async () => {
+    const storage = memoryStorage();
+    const owner = createLocalClient(storage);
+    await owner.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await owner.rpc("bootstrap_household");
+
+    const partner = createLocalClient(storage);
+    await partner.auth.signUp({ email: "papa@example.com", password: "secret2" });
+    await owner.auth.signInWithPassword({ email: "mama@example.com", password: "secret1" });
+
+    const invited = await owner.rpc("invite_by_email", { p_email: "Papa@Example.com" });
+    expect(invited.error).toBeNull();
+    const again = await owner.rpc("invite_by_email", { p_email: "papa@example.com" });
+    expect(again.error).toBeNull();
+
+    await partner.auth.signInWithPassword({ email: "papa@example.com", password: "secret2" });
+    const membership = await partner
+      .from("household_members")
+      .select("household_id")
+      .eq("user_id", (await partner.auth.getSession()).data.session?.user.id)
+      .maybeSingle();
+    expect(membership.data).toMatchObject({ household_id: household.data });
+
+    await owner.auth.signInWithPassword({ email: "mama@example.com", password: "secret1" });
+    const pending = await owner.rpc("invite_by_email", { p_email: "tia@example.com" });
+    expect(pending.error).toBeNull();
+    const stored = await owner
+      .from("email_invites")
+      .select("email, household_id")
+      .eq("email", "tia@example.com")
+      .maybeSingle();
+    expect(stored.data).toMatchObject({ email: "tia@example.com", household_id: household.data });
+
+    const aunt = createLocalClient(storage);
+    const signup = await aunt.auth.signUp({ email: "tia@example.com", password: "secret3" });
+    expect(signup.error).toBeNull();
+    const joined = await aunt
+      .from("household_members")
+      .select("household_id")
+      .eq("user_id", signup.data.session?.user.id)
+      .maybeSingle();
+    expect(joined.data).toMatchObject({ household_id: household.data });
+    const gone = await aunt.from("email_invites").select("email").eq("email", "tia@example.com");
+    expect(gone.data).toEqual([]);
+  });
+
   it("lets a second user join with the invite code", async () => {
     const storage = memoryStorage();
     const owner = createLocalClient(storage);

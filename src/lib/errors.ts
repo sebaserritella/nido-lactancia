@@ -36,6 +36,9 @@ export function messageForError(error: { code?: string; message?: string }): str
   if (normalized.includes("already registered")) {
     return emailTaken;
   }
+  if (normalized.includes("invalid email")) {
+    return es.invalidEmail;
+  }
   if (normalized.includes("rate limit") || normalized.includes("email rate")) {
     return "Supabase limitó el envío de correos. Esperá un rato y probá de nuevo.";
   }
