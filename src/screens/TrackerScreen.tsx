@@ -27,9 +27,10 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
   const [tab, setTab] = useState<"today" | "history">("today");
   const [name, setName] = useState("");
   const [bornOn, setBornOn] = useState("");
-  const [editingBaby, setEditingBaby] = useState(false);
   const [editName, setEditName] = useState("");
   const [editBornOn, setEditBornOn] = useState("");
+  const [renameForId, setRenameForId] = useState<string | null>(null);
+  const [babiesOpen, setBabiesOpen] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
   const [relativeEmail, setRelativeEmail] = useState("");
   const [invitePending, setInvitePending] = useState(false);
@@ -86,7 +87,6 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
 
   useEffect(() => {
     if (selectedId) localStorage.setItem(babyStorageKey, selectedId);
-    setEditingBaby(false);
   }, [selectedId]);
 
   async function addBaby(event: FormEvent) {
@@ -116,13 +116,6 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     setError(null);
   }
 
-  function startEdit(baby: Baby) {
-    setEditName(baby.name);
-    setEditBornOn(baby.born_on ?? "");
-    setEditingBaby(true);
-    setError(null);
-  }
-
   async function saveBaby(event: FormEvent) {
     event.preventDefault();
     const baby = babies.find((item) => item.id === selectedId);
@@ -136,10 +129,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       return;
     }
     const nextBorn = editBornOn === "" ? null : editBornOn;
-    if (trimmed === baby.name && nextBorn === baby.born_on) {
-      setEditingBaby(false);
-      return;
-    }
+    if (trimmed === baby.name && nextBorn === baby.born_on) return;
     const { error: updateError } = await client
       .from("babies")
       .update({ name: trimmed, born_on: nextBorn })
@@ -151,19 +141,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     setBabies((current) =>
       current.map((item) => (item.id === baby.id ? { ...item, name: trimmed, born_on: nextBorn } : item)),
     );
-    setEditingBaby(false);
     setError(null);
-  }
-
-  async function remove(baby: Baby) {
-    if (!window.confirm(es.confirmDeleteBaby(baby.name))) return;
-    const { error: deleteError } = await client.from("babies").delete().eq("id", baby.id);
-    if (deleteError) {
-      setError(messageForError(deleteError));
-      return;
-    }
-    setBabies((current) => current.filter((item) => item.id !== baby.id));
-    setSelectedId((current) => (current === baby.id ? null : current));
   }
 
   async function inviteRelative(event: FormEvent) {
@@ -189,6 +167,11 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
   }
 
   const selected = babies.find((baby) => baby.id === selectedId) ?? null;
+  if (selected && renameForId !== selected.id) {
+    setRenameForId(selected.id);
+    setEditName(selected.name);
+    setEditBornOn(selected.born_on ?? "");
+  }
 
   function addBabyForm(className: string) {
     return (
@@ -255,36 +238,6 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
           {addBabyForm("card stack")}
         </>
       )}
-      {selected && editingBaby ? (
-        <form className="card stack" onSubmit={saveBaby}>
-          <label>
-            {es.babyName}
-            <input required value={editName} onChange={(event) => setEditName(event.target.value)} />
-          </label>
-          <label>
-            {es.bornOn}
-            <input
-              type="date"
-              max={todayLocalDate(timeZone)}
-              value={editBornOn}
-              onChange={(event) => setEditBornOn(event.target.value)}
-            />
-          </label>
-          <button type="submit">{es.save}</button>
-          <button type="button" className="ghost" onClick={() => setEditingBaby(false)}>
-            {es.cancel}
-          </button>
-        </form>
-      ) : selected ? (
-        <div className="row-actions">
-          <button type="button" className="ghost" onClick={() => startEdit(selected)}>
-            {es.renameBaby}
-          </button>
-          <button type="button" className="ghost" onClick={() => remove(selected)}>
-            {es.deleteBaby}
-          </button>
-        </div>
-      ) : null}
       {error ? <p className="error">{error}</p> : null}
       {selected ? (
         <>
@@ -305,6 +258,16 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       ) : null}
       <div className="stack">
         <div className="row-actions">
+          {babies.length > 0 ? (
+            <button
+              type="button"
+              className="ghost"
+              aria-expanded={babiesOpen}
+              onClick={() => setBabiesOpen((open) => !open)}
+            >
+              {es.babies}
+            </button>
+          ) : null}
           <button
             type="button"
             className="ghost"
@@ -314,6 +277,29 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
             {es.family}
           </button>
         </div>
+        {babiesOpen && babies.length > 0 ? (
+          <section className="card stack">
+            {selected ? (
+              <form className="stack" onSubmit={saveBaby}>
+                <label>
+                  {es.babyName}
+                  <input required value={editName} onChange={(event) => setEditName(event.target.value)} />
+                </label>
+                <label>
+                  {es.bornOn}
+                  <input
+                    type="date"
+                    max={todayLocalDate(timeZone)}
+                    value={editBornOn}
+                    onChange={(event) => setEditBornOn(event.target.value)}
+                  />
+                </label>
+                <button type="submit">{es.renameBaby}</button>
+              </form>
+            ) : null}
+            {addBabyForm("stack")}
+          </section>
+        ) : null}
         {familyOpen ? (
           <section className="card stack">
             <h2>{es.inviteTitle}</h2>
@@ -338,7 +324,6 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
             </form>
             {inviteSent ? <p>{es.inviteSent}</p> : null}
             {inviteError ? <p className="error">{inviteError}</p> : null}
-            {babies.length > 0 ? addBabyForm("stack") : null}
           </section>
         ) : null}
       </div>
