@@ -27,6 +27,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   const [side, setSide] = useState<FeedSide>("left");
   const [error, setError] = useState<string | null>(null);
   const [backfill, setBackfill] = useState(false);
+  const [diaperBackfill, setDiaperBackfill] = useState(false);
   const [editing, setEditing] = useState<Feed | null>(null);
   const [editingDiaper, setEditingDiaper] = useState<Diaper | null>(null);
   const [tick, setTick] = useState(0);
@@ -159,6 +160,20 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     if (ok) setEditingDiaper(null);
   }
 
+  async function savePastDiaper(local: string, kind: DiaperKind) {
+    if (local === "") return;
+    const ok = await run(() =>
+      client.from("diapers").insert({
+        household_id: baby.household_id,
+        baby_id: baby.id,
+        occurred_at: zonedTimeToUtc(local, timeZone).toISOString(),
+        kind,
+        created_by: userId,
+      }),
+    );
+    if (ok) setDiaperBackfill(false);
+  }
+
   async function removeFeed(id: string) {
     if (!window.confirm(es.confirmDeleteFeed)) return;
     await run(() => client.from("feeds").delete().eq("id", id));
@@ -236,14 +251,27 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
             ) : null}
           </>
         ) : (
-          <div className="choice">
-            {(["pee", "poop", "both"] as DiaperKind[]).map((kind) => (
-              <button key={kind} type="button" className="ghost with-icon" onClick={() => logDiaper(kind)}>
-                <DiaperIcon />
-                {diaperLabel(kind)}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="choice">
+              {(["pee", "poop", "both"] as DiaperKind[]).map((kind) => (
+                <button key={kind} type="button" className="ghost with-icon" onClick={() => logDiaper(kind)}>
+                  <DiaperIcon />
+                  {diaperLabel(kind)}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="ghost" onClick={() => setDiaperBackfill((value) => !value)}>
+              {es.backfillDiaper}
+            </button>
+            {diaperBackfill ? (
+              <DiaperForm
+                initialWhen=""
+                initialKind="pee"
+                onCancel={() => setDiaperBackfill(false)}
+                onSave={(local, kind) => savePastDiaper(local, kind)}
+              />
+            ) : null}
+          </>
         )}
         {error ? <p className="error">{error}</p> : null}
       </section>

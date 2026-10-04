@@ -73,6 +73,7 @@ export const es = {
   started: "Empezó",
   ended: "Terminó",
   backfill: "Cargar toma pasada",
+  backfillDiaper: "Cargar pañal pasado",
   pee: "Pis",
   poop: "Caca",
   both: "Ambos",
