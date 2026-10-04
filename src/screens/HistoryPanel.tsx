@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { DiaperIcon, FeedIcon } from "../components/EventIcons";
 import type { Baby, Diaper, Feed, RangeStats } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { formatMinutes, formatStat } from "../lib/format";
@@ -111,29 +112,51 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
       {[...days.entries()]
         .sort((left, right) => right[0].localeCompare(left[0]))
         .map(([day, bucket]) => (
-        <section key={day} className="card">
+        <section key={day} className="card stack">
           <h2>{day}</h2>
-          <ul className="entries plain">
-            {bucket.feeds.map((feed) => (
-              <li key={feed.id}>
-                <div>
-                  <strong>
-                    {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
-                    {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ` · ${es.inProgress}`}
-                  </strong>
-                  <span>{sideLabel(feed.side)}</span>
-                </div>
-              </li>
-            ))}
-            {bucket.diapers.map((diaper) => (
-              <li key={diaper.id}>
-                <div>
-                  <strong>{toDatetimeLocalValue(diaper.occurred_at, timeZone).slice(11)}</strong>
-                  <span>{diaperLabel(diaper.kind)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="stack">
+            <h3 className="section-title">
+              <FeedIcon />
+              {es.feedsHeading}
+            </h3>
+            {bucket.feeds.length === 0 ? <p className="muted">{es.noFeedsYet}</p> : null}
+            <ul className="entries plain">
+              {bucket.feeds.map((feed) => (
+                <li key={feed.id}>
+                  <div className="entry-line">
+                    <FeedIcon />
+                    <div className="entry-copy">
+                      <strong>
+                        {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
+                        {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ` · ${es.inProgress}`}
+                      </strong>
+                      <span>{sideLabel(feed.side)}</span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="stack">
+            <h3 className="section-title">
+              <DiaperIcon />
+              {es.diapersHeading}
+            </h3>
+            {bucket.diapers.length === 0 ? <p className="muted">{es.noDiapersYet}</p> : null}
+            <ul className="entries plain">
+              {bucket.diapers.map((diaper) => (
+                <li key={diaper.id}>
+                  <div className="entry-line">
+                    <DiaperIcon />
+                    <div className="entry-copy">
+                      <strong>{toDatetimeLocalValue(diaper.occurred_at, timeZone).slice(11)}</strong>
+                      <span>{diaperLabel(diaper.kind)}</span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
       ))}
     </div>

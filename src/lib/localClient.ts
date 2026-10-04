@@ -30,6 +30,16 @@ type BabyRow = {
   id: string;
   household_id: string;
   name: string;
+  born_on: string | null;
+  created_at: string;
+};
+
+type WeightRow = {
+  id: string;
+  household_id: string;
+  baby_id: string;
+  weighed_on: string;
+  grams: number;
   created_at: string;
 };
 
@@ -61,6 +71,7 @@ type Database = {
   babies: BabyRow[];
   feeds: FeedRow[];
   diapers: DiaperRow[];
+  weights: WeightRow[];
   sessionUserId: string | null;
 };
 
@@ -73,10 +84,18 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
 
   function load(): Database {
     const raw = storage.getItem(storageKey);
-    if (!raw) {
-      return { users: [], members: [], invites: [], babies: [], feeds: [], diapers: [], sessionUserId: null };
-    }
-    return JSON.parse(raw) as Database;
+    if (!raw) return emptyDatabase();
+    const parsed = JSON.parse(raw) as Partial<Database>;
+    return {
+      users: parsed.users ?? [],
+      members: parsed.members ?? [],
+      invites: parsed.invites ?? [],
+      babies: (parsed.babies ?? []).map((baby) => ({ ...baby, born_on: baby.born_on ?? null })),
+      feeds: parsed.feeds ?? [],
+      diapers: parsed.diapers ?? [],
+      weights: parsed.weights ?? [],
+      sessionUserId: parsed.sessionUserId ?? null,
+    };
   }
 
   function save(db: Database) {
@@ -227,13 +246,14 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
 }
 
 class Query {
-  private operation: "select" | "insert" | "update" | "delete" = "select";
+  private operation: "select" | "insert" | "update" | "delete" | "upsert" = "select";
   private filters: { op: "eq" | "is" | "gte" | "lt" | "gt"; column: string; value: unknown }[] = [];
   private ordering: { column: string; ascending: boolean } | null = null;
   private maxRows: number | null = null;
   private shape: "many" | "maybe" | "one" = "many";
   private columns = "*";
   private payload: Row | null = null;
+  private onConflict: string | null = null;
 
   constructor(
     private readonly table: string,
@@ -250,6 +270,13 @@ class Query {
   insert(payload: Row) {
     this.operation = "insert";
     this.payload = payload;
+    return this;
+  }
+
+  upsert(payload: Row, options?: { onConflict?: string }) {
+    this.operation = "upsert";
+    this.payload = payload;
+    this.onConflict = options?.onConflict ?? null;
     return this;
   }
 
@@ -324,7 +351,23 @@ class Query {
       return { data: null, error: { message: error instanceof Error ? error.message : "error" } };
     }
     const rows = rowsOf(db, this.table);
-    if (this.operation === "insert") {
+    if (this.operation === "insert" || this.operation === "upsert") {
+      const conflictColumns = (this.onConflict ?? "")
+        .split(",")
+        .map((column) => column.trim())
+        .filter((column) => column !== "");
+      const existing =
+        this.operation === "upsert" && conflictColumns.length > 0
+          ? rows.find((row) => conflictColumns.every((column) => row[column] === this.payload?.[column]))
+          : undefined;
+      if (existing) {
+        const next = { ...existing, ...this.payload };
+        const constraint = constraintError(db, this.table, next, String(existing.id));
+        if (constraint) return { data: null, error: constraint };
+        Object.assign(existing, this.payload);
+        this.save(db);
+        return { data: this.shape === "many" ? null : project(existing, this.columns), error: null };
+      }
       const row: Row = {
         id: crypto.randomUUID(),
         created_at: new Date().toISOString(),
@@ -332,6 +375,7 @@ class Query {
         ...this.payload,
       };
       if (this.table === "feeds" && row.ended_at === undefined) row.ended_at = null;
+      if (this.table === "babies" && row.born_on === undefined) row.born_on = null;
       const constraint = constraintError(db, this.table, row, null);
       if (constraint) return { data: null, error: constraint };
       rows.push(row);
@@ -354,6 +398,7 @@ class Query {
       if (this.table === "babies") {
         db.feeds = db.feeds.filter((feed) => !ids.has(feed.baby_id));
         db.diapers = db.diapers.filter((diaper) => !ids.has(diaper.baby_id));
+        db.weights = db.weights.filter((weight) => !ids.has(weight.baby_id));
       }
       replaceRows(db, this.table, rows.filter((row) => !ids.has(row.id)));
       this.save(db);
@@ -375,12 +420,17 @@ class Query {
   }
 }
 
+function emptyDatabase(): Database {
+  return { users: [], members: [], invites: [], babies: [], feeds: [], diapers: [], weights: [], sessionUserId: null };
+}
+
 function rowsOf(db: Database, table: string): Row[] {
   if (table === "household_members") return db.members as unknown as Row[];
   if (table === "invites") return db.invites as unknown as Row[];
   if (table === "babies") return db.babies as unknown as Row[];
   if (table === "feeds") return db.feeds as unknown as Row[];
   if (table === "diapers") return db.diapers as unknown as Row[];
+  if (table === "weights") return db.weights as unknown as Row[];
   return [];
 }
 
@@ -388,6 +438,7 @@ function replaceRows(db: Database, table: string, rows: Row[]) {
   if (table === "babies") db.babies = rows as unknown as BabyRow[];
   if (table === "feeds") db.feeds = rows as unknown as FeedRow[];
   if (table === "diapers") db.diapers = rows as unknown as DiaperRow[];
+  if (table === "weights") db.weights = rows as unknown as WeightRow[];
   if (table === "invites") db.invites = rows as unknown as InviteRow[];
   if (table === "household_members") db.members = rows as unknown as MemberRow[];
 }
@@ -409,6 +460,17 @@ function project(row: Row, columns: string): Row {
 }
 
 function constraintError(db: Database, table: string, row: Row, ignoreId: string | null): ErrorResult {
+  if (table === "weights") {
+    const grams = row.grams;
+    if (typeof grams !== "number" || !Number.isInteger(grams) || grams <= 0 || grams >= 30_000) {
+      return { code: "23514", message: "weights_grams_check" };
+    }
+    const duplicate = db.weights.find(
+      (weight) => weight.baby_id === row.baby_id && weight.weighed_on === row.weighed_on && weight.id !== ignoreId,
+    );
+    if (duplicate) return { code: "23505", message: "weights_baby_day" };
+    return null;
+  }
   if (table !== "feeds") return null;
   if (row.ended_at != null && String(row.ended_at) <= String(row.started_at)) {
     return { code: "23514", message: "feeds_ended_after_start" };

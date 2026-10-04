@@ -1,3 +1,5 @@
+import { es } from "../i18n/es";
+
 const openFeed = "Esta toma ya está en curso en el otro teléfono.";
 const badInterval = "El fin tiene que ser después del inicio.";
 const badInvite = "El código no sirve, venció o ya se usó.";
@@ -10,6 +12,12 @@ export function messageForError(error: { code?: string; message?: string }): str
   const code = error.code ?? "";
   const message = error.message ?? "";
   const normalized = message.toLowerCase();
+  if (normalized.includes("weight") && code === "23505") {
+    return es.weightDayExists;
+  }
+  if (normalized.includes("weight") && code === "23514") {
+    return es.invalidWeight;
+  }
   if (code === "23505") {
     return openFeed;
   }

@@ -83,6 +83,23 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
 
 .choice, .tabs { flex-wrap: wrap; }
 
+.choice button.with-meta {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  height: auto;
+  min-height: 48px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  line-height: 1.2;
+}
+
+.baby-age {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
 .choice button, .tabs button { flex: 1; }
 
 .inline input { margin-top: 0; }
@@ -157,3 +174,75 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
 .latest .error { grid-column: 1 / -1; }
 
 details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+
+.event-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: block;
+}
+
+.entry-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.entries li div.entry-line {
+  display: flex;
+}
+
+.entry-copy {
+  display: grid;
+  min-width: 0;
+}
+
+button.with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.choice button.with-icon {
+  gap: 4px;
+  padding-inline: 8px;
+}
+
+.section-title .event-icon {
+  color: #9c3d2e;
+}
+
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: #fffdf9;
+  border: 1px solid #ddcfc0;
+  border-radius: 18px;
+}
+
+.segment button {
+  min-height: 48px;
+}
+
+.segment button.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.segment button.selected {
+  background: #9c3d2e;
+  color: #fffaf6;
+  border-color: #9c3d2e;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1rem;
+}

@@ -5,6 +5,15 @@ export type Baby = {
   id: string;
   household_id: string;
   name: string;
+  born_on: string | null;
+};
+
+export type Weight = {
+  id: string;
+  household_id: string;
+  baby_id: string;
+  weighed_on: string;
+  grams: number;
 };
 
 export type Feed = {

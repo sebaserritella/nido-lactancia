@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LatestSummary } from "../components/LatestSummary";
+import { DiaperIcon, FeedIcon } from "../components/EventIcons";
 import type { Baby } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedSide } from "../domain";
@@ -8,6 +9,7 @@ import { messageForError } from "../lib/errors";
 import { formatElapsed, formatMinutes } from "../lib/format";
 import { validateFeedInterval } from "../lib/feedRules";
 import { localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue, zonedTimeToUtc } from "../lib/localTime";
+import { WeightSection } from "./WeightSection";
 
 type TodayPanelProps = {
   client: SupabaseClient;
@@ -29,6 +31,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   const [editingDiaper, setEditingDiaper] = useState<Diaper | null>(null);
   const [tick, setTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const [action, setAction] = useState<"feed" | "diaper">("feed");
 
   const open = feeds.find((feed) => feed.ended_at === null) ?? null;
 
@@ -170,123 +173,166 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   return (
     <div className="stack">
+      <LatestSummary client={client} babyId={baby.id} timeZone={timeZone} refreshKey={tick} />
+      <div className="segment" role="group" aria-label={es.logMode}>
+        <button type="button" aria-pressed={action === "feed"} className={action === "feed" ? "selected with-icon" : "ghost with-icon"} onClick={() => setAction("feed")}>
+          <FeedIcon />
+          {es.logFeed}
+        </button>
+        <button
+          type="button"
+          aria-pressed={action === "diaper"}
+          className={action === "diaper" ? "selected with-icon" : "ghost with-icon"}
+          onClick={() => setAction("diaper")}
+        >
+          <DiaperIcon />
+          {es.logDiaper}
+        </button>
+      </div>
       <section className="card stack">
-        {open ? (
+        {action === "feed" ? (
           <>
-            <p className="timer">{formatElapsed(now - new Date(open.started_at).getTime())}</p>
-            <p className="muted">
-              {todayLocalDate(timeZone, new Date(open.started_at)) === today
-                ? `${es.inProgress} · ${sideLabel(open.side)}`
-                : es.inProgressSince(
-                    `${todayLocalDate(timeZone, new Date(open.started_at))} ${toDatetimeLocalValue(open.started_at, timeZone).slice(11)}`,
-                  )}
-            </p>
-            <button type="button" onClick={stopFeed}>
-              {es.ended}
+            {open ? (
+              <>
+                <p className="timer">{formatElapsed(now - new Date(open.started_at).getTime())}</p>
+                <p className="muted">
+                  {todayLocalDate(timeZone, new Date(open.started_at)) === today
+                    ? `${es.inProgress} · ${sideLabel(open.side)}`
+                    : es.inProgressSince(
+                        `${todayLocalDate(timeZone, new Date(open.started_at))} ${toDatetimeLocalValue(open.started_at, timeZone).slice(11)}`,
+                      )}
+                </p>
+                <button type="button" onClick={stopFeed}>
+                  {es.ended}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="choice">
+                  {(["left", "right", "both"] as FeedSide[]).map((value) => (
+                    <button key={value} type="button" className={side === value ? "selected" : "ghost"} onClick={() => setSide(value)}>
+                      {sideLabel(value)}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="with-icon" onClick={startFeed}>
+                  <FeedIcon />
+                  {es.started}
+                </button>
+              </>
+            )}
+            <button type="button" className="ghost" onClick={() => setBackfill((value) => !value)}>
+              {es.backfill}
             </button>
+            {backfill ? (
+              <FeedForm
+                requireEnd
+                initialStart=""
+                initialEnd=""
+                initialSide="left"
+                onCancel={() => setBackfill(false)}
+                onSave={(startLocal, endLocal, nextSide) => saveFeed(startLocal, endLocal, nextSide)}
+              />
+            ) : null}
           </>
         ) : (
-          <>
-            <div className="choice">
-              {(["left", "right", "both"] as FeedSide[]).map((value) => (
-                <button key={value} type="button" className={side === value ? "selected" : "ghost"} onClick={() => setSide(value)}>
-                  {sideLabel(value)}
-                </button>
-              ))}
-            </div>
-            <button type="button" onClick={startFeed}>
-              {es.started}
-            </button>
-          </>
+          <div className="choice">
+            {(["pee", "poop", "both"] as DiaperKind[]).map((kind) => (
+              <button key={kind} type="button" className="ghost with-icon" onClick={() => logDiaper(kind)}>
+                <DiaperIcon />
+                {diaperLabel(kind)}
+              </button>
+            ))}
+          </div>
         )}
-        <div className="choice">
-          {(["pee", "poop", "both"] as DiaperKind[]).map((kind) => (
-            <button key={kind} type="button" className="ghost" onClick={() => logDiaper(kind)}>
-              {diaperLabel(kind)}
-            </button>
-          ))}
-        </div>
-        <button type="button" className="ghost" onClick={() => setBackfill((value) => !value)}>
-          {es.backfill}
-        </button>
-        {backfill ? (
-          <FeedForm
-            requireEnd
-            initialStart=""
-            initialEnd=""
-            initialSide="left"
-            onCancel={() => setBackfill(false)}
-            onSave={(startLocal, endLocal, nextSide) => saveFeed(startLocal, endLocal, nextSide)}
-          />
-        ) : null}
         {error ? <p className="error">{error}</p> : null}
       </section>
-      <LatestSummary client={client} babyId={baby.id} timeZone={timeZone} refreshKey={tick} />
-      {feeds.length === 0 && diapers.length === 0 ? <p className="muted">{es.noEntries}</p> : null}
-      <ul className="entries">
-        {feeds.map((feed) => (
-          <li key={feed.id}>
-            <div>
-              <strong>
-                {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
-                {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ""}
-              </strong>
-              <span>
-                {sideLabel(feed.side)}
-                {feed.ended_at
-                  ? ` · ${formatMinutes((new Date(feed.ended_at).getTime() - new Date(feed.started_at).getTime()) / 60000)}`
-                  : ` · ${es.inProgress}`}
-              </span>
-            </div>
-            <div className="row-actions">
-              <button type="button" className="ghost" onClick={() => setEditing(feed)}>
-                {es.edit}
-              </button>
-              <button type="button" className="ghost" onClick={() => removeFeed(feed.id)}>
-                {es.delete}
-              </button>
-            </div>
-            {editing?.id === feed.id ? (
-              <FeedForm
-                requireEnd={false}
-                initialStart={toDatetimeLocalValue(feed.started_at, timeZone)}
-                initialEnd={feed.ended_at ? toDatetimeLocalValue(feed.ended_at, timeZone) : ""}
-                initialSide={feed.side}
-                onCancel={() => setEditing(null)}
-                onSave={(startLocal, endLocal, nextSide) => saveFeed(startLocal, endLocal, nextSide, feed.id)}
-              />
-            ) : null}
-          </li>
-        ))}
-        {diapers.map((diaper) => (
-          <li key={diaper.id}>
-            <div>
-              <strong>{toDatetimeLocalValue(diaper.occurred_at, timeZone).slice(11)}</strong>
-              <span>{diaperLabel(diaper.kind)}</span>
-            </div>
-            <div className="row-actions">
-              <button type="button" className="ghost" onClick={() => setEditingDiaper(diaper)}>
-                {es.edit}
-              </button>
-              <button type="button" className="ghost" onClick={() => removeDiaper(diaper.id)}>
-                {es.delete}
-              </button>
-            </div>
-            {editingDiaper?.id === diaper.id ? (
-              <DiaperForm
-                initialWhen={toDatetimeLocalValue(diaper.occurred_at, timeZone)}
-                initialKind={diaper.kind}
-                onCancel={() => setEditingDiaper(null)}
-                onSave={(local, kind) => saveDiaper(diaper.id, local, kind)}
-              />
-            ) : null}
-          </li>
-        ))}
-      </ul>
+      <section className="stack">
+        <h2 className="section-title">
+          <FeedIcon />
+          {es.feedsHeading}
+        </h2>
+        {feeds.length === 0 ? <p className="muted">{es.noFeedsYet}</p> : null}
+        <ul className="entries">
+          {feeds.map((feed) => (
+            <li key={feed.id}>
+              <div className="entry-line">
+                <FeedIcon />
+                <div className="entry-copy">
+                  <strong>
+                    {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
+                    {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ""}
+                  </strong>
+                  <span>
+                    {sideLabel(feed.side)}
+                    {feed.ended_at
+                      ? ` · ${formatMinutes((new Date(feed.ended_at).getTime() - new Date(feed.started_at).getTime()) / 60000)}`
+                      : ` · ${es.inProgress}`}
+                  </span>
+                </div>
+              </div>
+              <div className="row-actions">
+                <button type="button" className="ghost" onClick={() => setEditing(feed)}>
+                  {es.edit}
+                </button>
+                <button type="button" className="ghost" onClick={() => removeFeed(feed.id)}>
+                  {es.delete}
+                </button>
+              </div>
+              {editing?.id === feed.id ? (
+                <FeedForm
+                  requireEnd={false}
+                  initialStart={toDatetimeLocalValue(feed.started_at, timeZone)}
+                  initialEnd={feed.ended_at ? toDatetimeLocalValue(feed.ended_at, timeZone) : ""}
+                  initialSide={feed.side}
+                  onCancel={() => setEditing(null)}
+                  onSave={(startLocal, endLocal, nextSide) => saveFeed(startLocal, endLocal, nextSide, feed.id)}
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="stack">
+        <h2 className="section-title">
+          <DiaperIcon />
+          {es.diapersHeading}
+        </h2>
+        {diapers.length === 0 ? <p className="muted">{es.noDiapersYet}</p> : null}
+        <ul className="entries">
+          {diapers.map((diaper) => (
+            <li key={diaper.id}>
+              <div className="entry-line">
+                <DiaperIcon />
+                <div className="entry-copy">
+                  <strong>{toDatetimeLocalValue(diaper.occurred_at, timeZone).slice(11)}</strong>
+                  <span>{diaperLabel(diaper.kind)}</span>
+                </div>
+              </div>
+              <div className="row-actions">
+                <button type="button" className="ghost" onClick={() => setEditingDiaper(diaper)}>
+                  {es.edit}
+                </button>
+                <button type="button" className="ghost" onClick={() => removeDiaper(diaper.id)}>
+                  {es.delete}
+                </button>
+              </div>
+              {editingDiaper?.id === diaper.id ? (
+                <DiaperForm
+                  initialWhen={toDatetimeLocalValue(diaper.occurred_at, timeZone)}
+                  initialKind={diaper.kind}
+                  onCancel={() => setEditingDiaper(null)}
+                  onSave={(local, kind) => saveDiaper(diaper.id, local, kind)}
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+      <WeightSection client={client} baby={baby} timeZone={timeZone} />
     </div>
   );
 }
-
 function FeedForm({
   initialStart,
   initialEnd,
@@ -364,7 +410,8 @@ function DiaperForm({
       </label>
       <div className="choice">
         {(["pee", "poop", "both"] as DiaperKind[]).map((value) => (
-          <button key={value} type="button" className={kind === value ? "selected" : "ghost"} onClick={() => setKind(value)}>
+          <button key={value} type="button" className={kind === value ? "selected with-icon" : "ghost with-icon"} onClick={() => setKind(value)}>
+            <DiaperIcon />
             {diaperLabel(value)}
           </button>
         ))}

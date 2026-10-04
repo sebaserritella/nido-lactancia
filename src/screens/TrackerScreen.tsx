@@ -3,11 +3,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Baby } from "../domain";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
+import { birthDateIssue, formatBabyAge, formatCalendarDate } from "../lib/age";
 import { messageForError } from "../lib/errors";
+import { todayLocalDate } from "../lib/localTime";
 import { HistoryPanel } from "./HistoryPanel";
 import { TodayPanel } from "./TodayPanel";
 
 const babyStorageKey = "nido-lactancia.babyId";
+const babyColumns = "id, household_id, name, born_on";
 
 type TrackerScreenProps = {
   client: SupabaseClient;
@@ -22,23 +25,41 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
   const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem(babyStorageKey));
   const [tab, setTab] = useState<"today" | "history">("today");
   const [name, setName] = useState("");
+  const [bornOn, setBornOn] = useState("");
+  const [editingBaby, setEditingBaby] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editBornOn, setEditBornOn] = useState("");
   const [invite, setInvite] = useState<string | null>(null);
+  const [familyOpen, setFamilyOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let ignore = false;
     async function load() {
-      const { data, error: loadError } = await client
+      let { data, error: loadError } = await client
         .from("babies")
-        .select("id, household_id, name")
+        .select(babyColumns)
         .eq("household_id", householdId)
         .order("created_at");
+      if (loadError && (loadError.message ?? "").includes("born_on")) {
+        const retry = await client
+          .from("babies")
+          .select("id, household_id, name")
+          .eq("household_id", householdId)
+          .order("created_at");
+        data = ((retry.data ?? []) as Array<{ id: string; household_id: string; name: string }>).map((baby) => ({
+          ...baby,
+          born_on: null,
+        }));
+        loadError = retry.error;
+      }
       if (ignore) return;
       if (loadError) {
         setError(messageForError(loadError));
         return;
       }
-      const rows = (data ?? []) as Baby[];
+      const rows = ((data ?? []) as Baby[]).map((baby) => ({ ...baby, born_on: baby.born_on ?? null }));
       setBabies(rows);
       setSelectedId((current) => {
         if (current && rows.some((baby) => baby.id === current)) return current;
@@ -62,6 +83,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
 
   useEffect(() => {
     if (selectedId) localStorage.setItem(babyStorageKey, selectedId);
+    setEditingBaby(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -88,30 +110,66 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+    const today = todayLocalDate(timeZone);
+    const issue = birthDateIssue(bornOn, today, true);
+    if (issue) {
+      setError(birthMessage(issue));
+      return;
+    }
     const { data, error: insertError } = await client
       .from("babies")
-      .insert({ household_id: householdId, name: trimmed })
-      .select("id, household_id, name")
+      .insert({ household_id: householdId, name: trimmed, born_on: bornOn })
+      .select(babyColumns)
       .single();
     if (insertError || !data) {
       setError(messageForError(insertError ?? { message: "" }));
       return;
     }
-    const baby = data as Baby;
+    const baby = { ...(data as Baby), born_on: (data as Baby).born_on ?? null };
     setBabies((current) => [...current, baby]);
     setSelectedId(baby.id);
     setName("");
+    setBornOn("");
+    setError(null);
   }
 
-  async function rename(baby: Baby) {
-    const next = window.prompt(es.babyName, baby.name);
-    if (!next || next.trim() === "" || next.trim() === baby.name) return;
-    const { error: updateError } = await client.from("babies").update({ name: next.trim() }).eq("id", baby.id);
+  function startEdit(baby: Baby) {
+    setEditName(baby.name);
+    setEditBornOn(baby.born_on ?? "");
+    setEditingBaby(true);
+    setError(null);
+  }
+
+  async function saveBaby(event: FormEvent) {
+    event.preventDefault();
+    const baby = babies.find((item) => item.id === selectedId);
+    if (!baby) return;
+    const trimmed = editName.trim();
+    if (!trimmed) return;
+    const today = todayLocalDate(timeZone);
+    const issue = birthDateIssue(editBornOn, today, false);
+    if (issue) {
+      setError(birthMessage(issue));
+      return;
+    }
+    const nextBorn = editBornOn === "" ? null : editBornOn;
+    if (trimmed === baby.name && nextBorn === baby.born_on) {
+      setEditingBaby(false);
+      return;
+    }
+    const { error: updateError } = await client
+      .from("babies")
+      .update({ name: trimmed, born_on: nextBorn })
+      .eq("id", baby.id);
     if (updateError) {
       setError(messageForError(updateError));
       return;
     }
-    setBabies((current) => current.map((item) => (item.id === baby.id ? { ...item, name: next.trim() } : item)));
+    setBabies((current) =>
+      current.map((item) => (item.id === baby.id ? { ...item, name: trimmed, born_on: nextBorn } : item)),
+    );
+    setEditingBaby(false);
+    setError(null);
   }
 
   async function remove(baby: Baby) {
@@ -132,6 +190,17 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       return;
     }
     setInvite(data);
+    setCopied(false);
+  }
+
+  async function copyInvite() {
+    if (!invite) return;
+    try {
+      await navigator.clipboard.writeText(invite);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
   }
 
   const selected = babies.find((baby) => baby.id === selectedId) ?? null;
@@ -145,34 +214,77 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
         </button>
       </header>
       <LocalBanner />
-      <form className="card inline" onSubmit={addBaby}>
-        <input
-          aria-label={es.babyName}
-          placeholder={es.babyName}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
+      <form className="card stack" onSubmit={addBaby}>
+        <label>
+          {es.babyName}
+          <input
+            required
+            aria-label={es.babyName}
+            placeholder={es.babyName}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <label>
+          {es.bornOn}
+          <input
+            required
+            type="date"
+            max={todayLocalDate(timeZone)}
+            value={bornOn}
+            onChange={(event) => setBornOn(event.target.value)}
+          />
+        </label>
         <button type="submit">{es.addBaby}</button>
       </form>
       {babies.length > 0 ? (
         <div className="choice">
-          {babies.map((baby) => (
-            <button
-              key={baby.id}
-              type="button"
-              className={baby.id === selectedId ? "selected" : "ghost"}
-              onClick={() => setSelectedId(baby.id)}
-            >
-              {baby.name}
-            </button>
-          ))}
+          {babies.map((baby) => {
+            const age = baby.born_on ? formatBabyAge(baby.born_on, todayLocalDate(timeZone)) : null;
+            return (
+              <button
+                key={baby.id}
+                type="button"
+                className={`${baby.born_on ? "with-meta " : ""}${baby.id === selectedId ? "selected" : "ghost"}`}
+                onClick={() => setSelectedId(baby.id)}
+              >
+                <span>{baby.name}</span>
+                {baby.born_on ? (
+                  <span className="baby-age">
+                    {formatCalendarDate(baby.born_on)}
+                    {age ? ` · ${age}` : ""}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </div>
       ) : (
         <p className="muted">{es.noBabies}</p>
       )}
-      {selected ? (
+      {selected && editingBaby ? (
+        <form className="card stack" onSubmit={saveBaby}>
+          <label>
+            {es.babyName}
+            <input required value={editName} onChange={(event) => setEditName(event.target.value)} />
+          </label>
+          <label>
+            {es.bornOn}
+            <input
+              type="date"
+              max={todayLocalDate(timeZone)}
+              value={editBornOn}
+              onChange={(event) => setEditBornOn(event.target.value)}
+            />
+          </label>
+          <button type="submit">{es.save}</button>
+          <button type="button" className="ghost" onClick={() => setEditingBaby(false)}>
+            {es.cancel}
+          </button>
+        </form>
+      ) : selected ? (
         <div className="row-actions">
-          <button type="button" className="ghost" onClick={() => rename(selected)}>
+          <button type="button" className="ghost" onClick={() => startEdit(selected)}>
             {es.rename}
           </button>
           <button type="button" className="ghost" onClick={() => remove(selected)}>
@@ -180,14 +292,6 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
           </button>
         </div>
       ) : null}
-      <details className="card">
-        <summary>{es.inviteTitle}</summary>
-        <p className="muted">{es.inviteHelp}</p>
-        {invite ? <p className="code">{invite}</p> : null}
-        <button type="button" className="ghost" onClick={newInvite}>
-          {es.inviteAgain}
-        </button>
-      </details>
       {error ? <p className="error">{error}</p> : null}
       {selected ? (
         <>
@@ -206,6 +310,39 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
           )}
         </>
       ) : null}
+      <div className="stack">
+        <div className="row-actions">
+          <button
+            type="button"
+            className="ghost"
+            aria-expanded={familyOpen}
+            onClick={() => setFamilyOpen((open) => !open)}
+          >
+            {es.family}
+          </button>
+        </div>
+        {familyOpen ? (
+          <section className="card stack">
+            <h2>{es.inviteTitle}</h2>
+            <p className="muted">{es.inviteHelp}</p>
+            {invite ? <p className="code">{invite}</p> : null}
+            {invite ? (
+              <button type="button" className="ghost" onClick={() => void copyInvite()}>
+                {copied ? es.copied : es.copy}
+              </button>
+            ) : null}
+            <button type="button" className="ghost" onClick={() => void newInvite()}>
+              {es.inviteAgain}
+            </button>
+          </section>
+        ) : null}
+      </div>
     </main>
   );
+}
+
+function birthMessage(issue: "missing" | "invalid" | "future"): string {
+  if (issue === "missing") return es.missingBirth;
+  if (issue === "future") return es.futureBirth;
+  return es.invalidBirth;
 }

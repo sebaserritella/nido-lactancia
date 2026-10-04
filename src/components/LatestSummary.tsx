@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DiaperKind, FeedSide } from "../domain";
+import { DiaperIcon, FeedIcon } from "./EventIcons";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
 import { formatLatestFeedLine, formatLatestStamp } from "../lib/latestStamp";
@@ -89,14 +90,20 @@ export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSu
   return (
     <section className="latest">
       <article className="card">
-        <h2>{es.latestFeed}</h2>
+        <div className="entry-line">
+          <FeedIcon />
+          <h2>{es.latestFeed}</h2>
+        </div>
         {ready && feed ? <p>{sideLabel(feed.side)}</p> : null}
         <p className="muted">
           {!ready ? es.loading : feed ? formatLatestFeedLine(feed.started_at, feed.ended_at, timeZone, es.inProgress) : es.noFeedsYet}
         </p>
       </article>
       <article className="card">
-        <h2>{es.latestDiaper}</h2>
+        <div className="entry-line">
+          <DiaperIcon />
+          <h2>{es.latestDiaper}</h2>
+        </div>
         {ready && diaper ? <p>{diaperLabel(diaper.kind)}</p> : null}
         <p className="muted">{!ready ? es.loading : diaper ? formatLatestStamp(diaper.occurred_at, timeZone) : es.noDiapersYet}</p>
       </article>
