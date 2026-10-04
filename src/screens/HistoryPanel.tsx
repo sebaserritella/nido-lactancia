@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DiaperIcon, FeedIcon } from "../components/EventIcons";
+import { SharePie } from "../components/SharePie";
 import type { Baby, Diaper, Feed, RangeStats } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { formatMinutes, formatStat } from "../lib/format";
 import { addCalendarDays, localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue } from "../lib/localTime";
 import { messageForError } from "../lib/errors";
+import { summarizePeriod, type StatGrain } from "../lib/periodStats";
 
 type HistoryPanelProps = {
   client: SupabaseClient;
@@ -17,6 +19,7 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
   const today = todayLocalDate(timeZone);
   const [from, setFrom] = useState(() => addCalendarDays(today, -6));
   const [to, setTo] = useState(today);
+  const [grain, setGrain] = useState<StatGrain>("day");
   const [stats, setStats] = useState<RangeStats | null>(null);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [diapers, setDiapers] = useState<Diaper[]>([]);
@@ -85,15 +88,23 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
 
   return (
     <div className="stack">
-      <section className="card dates">
-        <label>
-          {es.from}
-          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-        </label>
-        <label>
-          {es.to}
-          <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-        </label>
+      <section className="card stack">
+        <div className="dates">
+          <label>
+            {es.from}
+            <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+          </label>
+          <label>
+            {es.to}
+            <input type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+          </label>
+        </div>
+        <div className="segment thirds" role="group" aria-label={es.grain}>
+          <GrainButton grain="day" current={grain} onSelect={setGrain} label={es.grainDay} />
+          <GrainButton grain="week" current={grain} onSelect={setGrain} label={es.grainWeek} />
+          <GrainButton grain="month" current={grain} onSelect={setGrain} label={es.grainMonth} />
+        </div>
+        <p className="muted">{es.periodNote}</p>
       </section>
       {error ? <p className="error">{error}</p> : null}
       {stats ? (
@@ -107,6 +118,7 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
           <p className="muted">{es.statsNote}</p>
         </section>
       ) : null}
+      {!loading && !error ? <PeriodCharts feeds={feeds} diapers={diapers} babyId={baby.id} from={from} to={to} timeZone={timeZone} grain={grain} /> : null}
       {loading ? <p className="muted">{es.loading}</p> : null}
       {days.size === 0 && !error && !loading ? <p className="muted">{es.emptyRange}</p> : null}
       {[...days.entries()]
@@ -160,6 +172,67 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
         </section>
       ))}
     </div>
+  );
+}
+
+function GrainButton({
+  grain,
+  current,
+  onSelect,
+  label,
+}: {
+  grain: StatGrain;
+  current: StatGrain;
+  onSelect: (grain: StatGrain) => void;
+  label: string;
+}) {
+  return (
+    <button type="button" aria-pressed={current === grain} className={current === grain ? "selected" : "ghost"} onClick={() => onSelect(grain)}>
+      {label}
+    </button>
+  );
+}
+
+function PeriodCharts({
+  feeds,
+  diapers,
+  babyId,
+  from,
+  to,
+  timeZone,
+  grain,
+}: {
+  feeds: Feed[];
+  diapers: Diaper[];
+  babyId: string;
+  from: string;
+  to: string;
+  timeZone: string;
+  grain: StatGrain;
+}) {
+  const period = summarizePeriod(feeds, diapers, babyId, from, to, timeZone, grain);
+  const minutesTitle = grain === "week" ? es.minutesPerWeek : grain === "month" ? es.minutesPerMonth : es.minutesPerDay;
+  const diapersTitle = grain === "week" ? es.diapersPerWeek : grain === "month" ? es.diapersPerMonth : es.diapersPerDay;
+
+  return (
+    <>
+      <section className="card stack">
+        <Stat label={minutesTitle} value={formatMinutes(period.minutesPerPeriod)} />
+        <SharePie
+          portions={period.sidePortions}
+          labelFor={(key) => sideLabel(key === "pee" || key === "poop" ? "both" : key)}
+          valueFor={(portion) => formatMinutes(portion.perPeriod) ?? es.noData}
+        />
+      </section>
+      <section className="card stack">
+        <Stat label={diapersTitle} value={formatStat(period.diapersPerPeriod)} />
+        <SharePie
+          portions={period.diaperPortions}
+          labelFor={(key) => diaperLabel(key === "left" || key === "right" ? "both" : key)}
+          valueFor={(portion) => formatStat(portion.perPeriod) ?? es.noData}
+        />
+      </section>
+    </>
   );
 }
 
