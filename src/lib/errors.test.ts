@@ -9,5 +9,6 @@ describe("messageForError", () => {
   it("explains a bad invite and a bad login", () => {
     expect(messageForError({ message: "invalid invite" })).toMatch(/código/);
     expect(messageForError({ message: "Invalid login credentials" })).toMatch(/contraseña/);
+    expect(messageForError({ message: "Email address not authorized" })).toMatch(/mail de prueba/);
   });
 });

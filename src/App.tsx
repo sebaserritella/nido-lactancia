@@ -5,11 +5,13 @@ import { readSupabaseEnv } from "./lib/env";
 import { createLocalClient } from "./lib/localClient";
 import { markLocalMode } from "./lib/localMode";
 import { createAppClient } from "./lib/supabaseClient";
-import { AuthScreen } from "./screens/AuthScreen";
+import { recoveryLinkState, type RecoveryLinkState } from "./lib/passwordRecovery";
+import { AuthScreen, NewPasswordScreen } from "./screens/AuthScreen";
 import { FamilyScreen } from "./screens/FamilyScreen";
 import { TrackerScreen } from "./screens/TrackerScreen";
 
 export function App() {
+  const [recovery, setRecovery] = useState<RecoveryLinkState>(() => recoveryLinkState(window.location.href));
   const client = useMemo(() => {
     const env = readSupabaseEnv();
     if (!env) {
@@ -33,7 +35,8 @@ export function App() {
       setSession(data.session);
       setReady(true);
     });
-    const { data } = client.auth.onAuthStateChange((_event, next) => {
+    const { data } = client.auth.onAuthStateChange((event, next) => {
+      if (event === "PASSWORD_RECOVERY") setRecovery("recovery");
       setSession(next);
       setReady(true);
     });
@@ -67,12 +70,15 @@ export function App() {
     };
   }, [client, session]);
 
-  if (!ready || (session && !householdReady)) {
+  if (!ready || (session && recovery !== "recovery" && !householdReady)) {
     return (
       <main className="shell">
         <p>{es.loading}</p>
       </main>
     );
+  }
+  if (recovery === "recovery" && session) {
+    return <NewPasswordScreen client={client} onDone={() => setRecovery(null)} />;
   }
   if (session && householdError) {
     return (
@@ -85,7 +91,7 @@ export function App() {
       </main>
     );
   }
-  if (!session) return <AuthScreen client={client} />;
+  if (!session) return <AuthScreen client={client} notice={recovery === "expired" ? es.recoveryExpired : null} />;
   if (!householdId) {
     return (
       <FamilyScreen

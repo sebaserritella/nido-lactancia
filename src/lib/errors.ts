@@ -28,5 +28,14 @@ export function messageForError(error: { code?: string; message?: string }): str
   if (normalized.includes("already registered")) {
     return emailTaken;
   }
+  if (normalized.includes("rate limit") || normalized.includes("email rate")) {
+    return "Supabase limitó el envío de correos. Esperá un rato y probá de nuevo.";
+  }
+  if (normalized.includes("not authorized")) {
+    return "Ese correo no puede recibir el enlace con el mail de prueba de Supabase.";
+  }
+  if (normalized.includes("email address") && normalized.includes("invalid")) {
+    return "Ingresá un correo válido, por ejemplo nombre@gmail.com.";
+  }
   return generic;
 }

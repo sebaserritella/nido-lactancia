@@ -21,7 +21,7 @@ npm test
 npm run dev
 ```
 
-La cuenta es un correo real y una contraseña. Supabase guarda la contraseña hasheada. Un apodo, sin `@`, no se puede registrar.
+La cuenta es un correo real y una contraseña. Supabase guarda la contraseña hasheada. Un apodo, sin `@`, no se puede registrar. **Olvidé mi contraseña** manda un enlace a ese correo; al abrirlo, la página pide una contraseña nueva. El mail de prueba de Supabase solo entrega ese enlace a los correos del equipo del proyecto. Para que le llegue a cualquier cuenta, hay que configurar un SMTP propio en Authentication → Emails.
 
 La primera persona elige **Crear familia** y le pasa el código a la otra. La segunda se registra y elige **Tengo un código**.
 
