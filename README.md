@@ -38,6 +38,6 @@ En pantalla, la hora es la del dispositivo.
 
 ## Publicar en GitHub Pages
 
-En el repo, Settings → Secrets, agregá `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Settings → Pages → Source: GitHub Actions. El workflow `.github/workflows/deploy-pages.yml` corre los tests y publica `main`.
+Settings → Pages → Source: GitHub Actions. El workflow `.github/workflows/deploy-pages.yml` corre los tests y publica `main`. El build lee `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Con esas dos variables, la página publicada guarda en Supabase. Sin ellas, guarda solo en el navegador.
 
 El proyecto gratis de Supabase se pausa si nadie entra durante 7 días. Hay que restaurarlo desde el dashboard.
