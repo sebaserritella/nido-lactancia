@@ -132,4 +132,28 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
 
 .stats .muted { grid-column: 1 / -1; }
 
+.latest {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.latest article {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+}
+
+.latest h2 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6e625a;
+}
+
+.latest p { margin: 0; overflow-wrap: anywhere; }
+
+.latest .error { grid-column: 1 / -1; }
+
 details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }

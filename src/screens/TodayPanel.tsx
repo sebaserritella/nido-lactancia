@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { LatestSummary } from "../components/LatestSummary";
 import type { Baby } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedSide } from "../domain";
@@ -220,6 +221,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
         ) : null}
         {error ? <p className="error">{error}</p> : null}
       </section>
+      <LatestSummary client={client} babyId={baby.id} timeZone={timeZone} refreshKey={tick} />
       {feeds.length === 0 && diapers.length === 0 ? <p className="muted">{es.noEntries}</p> : null}
       <ul className="entries">
         {feeds.map((feed) => (
