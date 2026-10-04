@@ -6,6 +6,7 @@ import type { Baby } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
+import { activeElapsedMs, activeMinutes, closePause } from "../lib/feedDuration";
 import { formatElapsed, formatMinutes } from "../lib/format";
 import { validateFeedInterval } from "../lib/feedRules";
 import { localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue, zonedTimeToUtc } from "../lib/localTime";
@@ -18,7 +19,7 @@ type TodayPanelProps = {
   timeZone: string;
 };
 
-const feedColumns = "id, household_id, baby_id, started_at, ended_at, side";
+const feedColumns = "id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side";
 const diaperColumns = "id, household_id, baby_id, occurred_at, kind";
 
 export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) {
@@ -113,9 +114,23 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     );
   }
 
+  async function pauseFeed() {
+    if (!open || open.paused_at) return;
+    await run(() => client.from("feeds").update({ paused_at: new Date().toISOString() }).eq("id", open.id));
+  }
+
+  async function resumeFeed() {
+    if (!open?.paused_at) return;
+    const now = Date.now();
+    await run(() => client.from("feeds").update(closePause(open, now)).eq("id", open.id));
+  }
+
   async function stopFeed() {
     if (!open) return;
-    await run(() => client.from("feeds").update({ ended_at: new Date().toISOString() }).eq("id", open.id));
+    const now = Date.now();
+    await run(() =>
+      client.from("feeds").update({ ...closePause(open, now), ended_at: new Date(now).toISOString() }).eq("id", open.id),
+    );
   }
 
   async function logDiaper(kind: DiaperKind) {
@@ -209,17 +224,30 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
           <>
             {open ? (
               <>
-                <p className="timer">{formatElapsed(now - new Date(open.started_at).getTime())}</p>
+                <p className="timer">{formatElapsed(activeElapsedMs(open, now))}</p>
                 <p className="muted">
                   {todayLocalDate(timeZone, new Date(open.started_at)) === today
-                    ? `${es.inProgress} · ${sideLabel(open.side)}`
-                    : es.inProgressSince(
-                        `${todayLocalDate(timeZone, new Date(open.started_at))} ${toDatetimeLocalValue(open.started_at, timeZone).slice(11)}`,
-                      )}
+                    ? `${open.paused_at ? es.paused : es.inProgress} · ${sideLabel(open.side)}`
+                    : open.paused_at
+                      ? `${es.paused} · ${todayLocalDate(timeZone, new Date(open.started_at))} ${toDatetimeLocalValue(open.started_at, timeZone).slice(11)}`
+                      : es.inProgressSince(
+                          `${todayLocalDate(timeZone, new Date(open.started_at))} ${toDatetimeLocalValue(open.started_at, timeZone).slice(11)}`,
+                        )}
                 </p>
-                <button type="button" onClick={stopFeed}>
-                  {es.ended}
-                </button>
+                <div className="choice">
+                  {open.paused_at ? (
+                    <button type="button" onClick={resumeFeed}>
+                      {es.resume}
+                    </button>
+                  ) : (
+                    <button type="button" className="ghost" onClick={pauseFeed}>
+                      {es.pause}
+                    </button>
+                  )}
+                  <button type="button" onClick={stopFeed}>
+                    {es.ended}
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -294,8 +322,8 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                   <span>
                     {sideLabel(feed.side)}
                     {feed.ended_at
-                      ? ` · ${formatMinutes((new Date(feed.ended_at).getTime() - new Date(feed.started_at).getTime()) / 60000)}`
-                      : ` · ${es.inProgress}`}
+                      ? ` · ${formatMinutes(activeMinutes(feed))}`
+                      : ` · ${feed.paused_at ? es.paused : es.inProgress}`}
                   </span>
                 </div>
               </div>

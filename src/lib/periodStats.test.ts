@@ -101,6 +101,28 @@ describe("summarizePeriod", () => {
     expect(empty.buckets[0]).toMatchObject({ leftMinutes: 0, pee: 0 });
   });
 
+  it("excludes paused minutes from the day total", () => {
+    const stats = summarizePeriod(
+      [
+        {
+          baby_id: babyId,
+          started_at: "2026-10-01T03:00:00Z",
+          ended_at: "2026-10-01T03:20:00Z",
+          paused_ms: 5 * 60 * 1000,
+          side: "left" as const,
+        },
+      ],
+      [],
+      babyId,
+      "2026-10-01",
+      "2026-10-01",
+      zone,
+      "day",
+    );
+    expect(stats.minutesPerPeriod).toBeCloseTo(15);
+    expect(stats.buckets[0].leftMinutes).toBeCloseTo(15);
+  });
+
   it("slides the date window by its own length", () => {
     expect(shiftRange("2026-10-01", "2026-10-03", -1)).toEqual({ from: "2026-09-28", to: "2026-09-30" });
     expect(shiftRange("2026-10-01", "2026-10-03", 1)).toEqual({ from: "2026-10-04", to: "2026-10-06" });

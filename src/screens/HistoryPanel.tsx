@@ -40,7 +40,7 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
         client.rpc("range_stats", { p_baby_id: baby.id, p_from: from, p_to: to, p_tz: timeZone }),
         client
           .from("feeds")
-          .select("id, household_id, baby_id, started_at, ended_at, side")
+          .select("id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side")
           .eq("baby_id", baby.id)
           .gte("started_at", range.startInclusive.toISOString())
           .lt("started_at", range.endExclusive.toISOString())
@@ -159,7 +159,7 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
                     <div className="entry-copy">
                       <strong>
                         {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
-                        {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ` · ${es.inProgress}`}
+                        {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ` · ${feed.paused_at ? es.paused : es.inProgress}`}
                       </strong>
                       <span>{sideLabel(feed.side)}</span>
                     </div>

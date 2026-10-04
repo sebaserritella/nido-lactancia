@@ -1,3 +1,4 @@
+import { activeMinutes } from "./feedDuration";
 import { formatMinutes } from "./format";
 import { todayLocalDate, toDatetimeLocalValue } from "./localTime";
 
@@ -21,10 +22,11 @@ export function formatLatestFeedLine(
   timeZone: string,
   inProgressLabel: string,
   now = new Date(),
+  pausedMs = 0,
 ): string {
   const start = formatLatestStamp(startedAt, timeZone, now);
   if (endedAt === null) return `${start} · ${inProgressLabel}`;
   const end = formatLatestClock(endedAt, timeZone);
-  const minutes = formatMinutes((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000);
+  const minutes = formatMinutes(activeMinutes({ started_at: startedAt, ended_at: endedAt, paused_ms: pausedMs }));
   return minutes ? `${start}–${end} · ${minutes}` : `${start}–${end}`;
 }

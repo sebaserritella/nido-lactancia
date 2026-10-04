@@ -22,6 +22,8 @@ export type Feed = {
   baby_id: string;
   started_at: string;
   ended_at: string | null;
+  paused_ms: number;
+  paused_at: string | null;
   side: FeedSide;
 };
 

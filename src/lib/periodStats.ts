@@ -1,4 +1,5 @@
 import type { DiaperKind, FeedSide } from "../domain";
+import { activeMinutes } from "./feedDuration";
 import { addCalendarDays, todayLocalDate } from "./localTime";
 
 export type StatGrain = "day" | "week" | "month";
@@ -35,6 +36,8 @@ type FeedPoint = {
   baby_id: string;
   started_at: string;
   ended_at: string | null;
+  paused_ms?: number | null;
+  paused_at?: string | null;
   side: FeedSide;
 };
 
@@ -71,7 +74,7 @@ export function summarizePeriod(
 
   const sideTotals = new Map<FeedSide, number>(sideOrder.map((side) => [side, 0]));
   for (const feed of completed) {
-    const minutes = (new Date(feed.ended_at ?? feed.started_at).getTime() - new Date(feed.started_at).getTime()) / 60000;
+    const minutes = activeMinutes(feed);
     sideTotals.set(feed.side, (sideTotals.get(feed.side) ?? 0) + minutes);
   }
   const diaperTotals = new Map<DiaperKind, number>(diaperOrder.map((kind) => [kind, 0]));
@@ -148,7 +151,7 @@ function buildBuckets(
   for (const feed of feeds) {
     const bucket = byKey.get(periodKey(localDay(feed.started_at, timeZone), grain));
     if (!bucket || feed.ended_at === null) continue;
-    const minutes = (new Date(feed.ended_at).getTime() - new Date(feed.started_at).getTime()) / 60000;
+    const minutes = activeMinutes(feed);
     if (feed.side === "left") bucket.leftMinutes += minutes;
     else if (feed.side === "right") bucket.rightMinutes += minutes;
     else bucket.bothSideMinutes += minutes;

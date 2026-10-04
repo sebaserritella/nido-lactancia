@@ -32,6 +32,25 @@ describe("computeRangeStats", () => {
     expect(stats.mean_gap_minutes).toBeCloseTo(745);
   });
 
+  it("subtracts paused minutes from the feed average", () => {
+    const stats = computeRangeStats(
+      [
+        {
+          baby_id: babyId,
+          started_at: "2026-10-01T15:00:00Z",
+          ended_at: "2026-10-01T15:20:00Z",
+          paused_ms: 5 * 60 * 1000,
+        },
+      ],
+      [],
+      babyId,
+      "2026-10-01",
+      "2026-10-01",
+      "America/Argentina/Buenos_Aires",
+    );
+    expect(stats.minutes_per_feed).toBeCloseTo(15);
+  });
+
   it("skips days without that statistic and keeps a short feed under one minute", () => {
     const stats = computeRangeStats(
       [{ baby_id: babyId, started_at: "2026-10-01T15:00:00Z", ended_at: "2026-10-01T15:00:30Z" }],

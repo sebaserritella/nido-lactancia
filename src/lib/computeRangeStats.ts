@@ -1,10 +1,13 @@
 import type { DiaperKind, RangeStats } from "../domain";
+import { activeMinutes } from "./feedDuration";
 import { todayLocalDate } from "./localTime";
 
 type FeedPoint = {
   baby_id: string;
   started_at: string;
   ended_at: string | null;
+  paused_ms?: number | null;
+  paused_at?: string | null;
 };
 
 type DiaperPoint = {
@@ -29,9 +32,7 @@ export function computeRangeStats(
     (diaper) => diaper.baby_id === babyId && inRange(diaper.occurred_at, from, to, timeZone),
   );
   const completed = rangedFeeds.filter((feed) => feed.ended_at !== null);
-  const minutes = completed.map(
-    (feed) => (new Date(feed.ended_at ?? feed.started_at).getTime() - new Date(feed.started_at).getTime()) / 60000,
-  );
+  const minutes = completed.map((feed) => activeMinutes(feed));
   const gaps: number[] = [];
   for (let index = 1; index < rangedFeeds.length; index += 1) {
     gaps.push(

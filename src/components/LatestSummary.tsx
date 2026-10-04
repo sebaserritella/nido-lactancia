@@ -17,6 +17,8 @@ type LatestFeed = {
   id: string;
   started_at: string;
   ended_at: string | null;
+  paused_ms: number;
+  paused_at: string | null;
   side: FeedSide;
 };
 
@@ -26,7 +28,7 @@ type LatestDiaper = {
   kind: DiaperKind;
 };
 
-const feedColumns = "id, started_at, ended_at, side";
+const feedColumns = "id, started_at, ended_at, paused_ms, paused_at, side";
 const diaperColumns = "id, occurred_at, kind";
 
 export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSummaryProps) {
@@ -96,7 +98,18 @@ export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSu
         </div>
         {ready && feed ? <p>{sideLabel(feed.side)}</p> : null}
         <p className="muted">
-          {!ready ? es.loading : feed ? formatLatestFeedLine(feed.started_at, feed.ended_at, timeZone, es.inProgress) : es.noFeedsYet}
+          {!ready
+            ? es.loading
+            : feed
+              ? formatLatestFeedLine(
+                  feed.started_at,
+                  feed.ended_at,
+                  timeZone,
+                  feed.paused_at ? es.paused : es.inProgress,
+                  new Date(),
+                  feed.paused_ms ?? 0,
+                )
+              : es.noFeedsYet}
         </p>
       </article>
       <article className="card">

@@ -24,7 +24,7 @@ describe("range_stats_for_household", () => {
       create or replace function auth.uid() returns uuid
       language sql stable as $$ select null::uuid $$;
     `);
-    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql"]) {
+    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql", "0008_feed_pause.sql"]) {
       await db.exec(readFileSync(join(root, file), "utf8"));
     }
     await db.exec(`
@@ -65,6 +65,21 @@ describe("range_stats_for_household", () => {
     expect(stats.poop_per_day).toBeNull();
     expect(stats.both_diapers_per_day).toBe(1);
     expect(stats.mean_gap_minutes).toBeCloseTo(745);
+  });
+
+  it("leaves paused minutes out of the average", async () => {
+    const pausedBabyId = "44444444-4444-4444-4444-444444444444";
+    await db.exec(`
+      insert into babies (id, household_id, name)
+      values ('${pausedBabyId}', '${householdId}', 'Paz');
+      insert into feeds (household_id, baby_id, started_at, ended_at, paused_ms, side, created_by)
+      values ('${householdId}', '${pausedBabyId}', '2026-10-01T15:00:00Z', '2026-10-01T15:20:00Z', ${5 * 60 * 1000}, 'left', '${userId}');
+    `);
+    const result = await db.query<{ stats: Stats }>(
+      `select range_stats_for_household($1, $2, '2026-10-01', '2026-10-01', 'America/Argentina/Buenos_Aires') as stats`,
+      [householdId, pausedBabyId],
+    );
+    expect(result.rows[0].stats.minutes_per_feed).toBeCloseTo(15);
   });
 
   it("skips days without that statistic and keeps a short feed under one minute", async () => {

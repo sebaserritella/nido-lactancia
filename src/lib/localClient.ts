@@ -57,6 +57,8 @@ type FeedRow = {
   baby_id: string;
   started_at: string;
   ended_at: string | null;
+  paused_ms: number;
+  paused_at: string | null;
   side: FeedSide;
   created_by: string;
   created_at: string;
@@ -435,6 +437,8 @@ class Query {
         ...this.payload,
       };
       if (this.table === "feeds" && row.ended_at === undefined) row.ended_at = null;
+      if (this.table === "feeds" && row.paused_ms === undefined) row.paused_ms = 0;
+      if (this.table === "feeds" && row.paused_at === undefined) row.paused_at = null;
       if (this.table === "babies" && row.born_on === undefined) row.born_on = null;
       const constraint = constraintError(db, this.table, row, null);
       if (constraint) return { data: null, error: constraint };
@@ -565,6 +569,9 @@ function constraintError(db: Database, table: string, row: Row, ignoreId: string
   if (table !== "feeds") return null;
   if (row.ended_at != null && String(row.ended_at) <= String(row.started_at)) {
     return { code: "23514", message: "feeds_ended_after_start" };
+  }
+  if (typeof row.paused_ms === "number" && row.paused_ms < 0) {
+    return { code: "23514", message: "feeds_paused_ms_non_negative" };
   }
   if (row.ended_at == null) {
     const open = db.feeds.find((feed) => feed.baby_id === row.baby_id && feed.ended_at === null && feed.id !== ignoreId);

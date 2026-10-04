@@ -26,6 +26,12 @@ describe("latest stamp", () => {
     );
   });
 
+  it("drops paused minutes from the finished line", () => {
+    expect(
+      formatLatestFeedLine("2026-10-04T15:32:00.000Z", "2026-10-04T15:50:00.000Z", BUENOS_AIRES, "En curso", now, 5 * 60 * 1000),
+    ).toBe("12:32–12:50 · 13 min");
+  });
+
   it("marks an open feed as in progress without elapsed minutes", () => {
     expect(formatLatestFeedLine("2026-10-04T15:05:00.000Z", null, BUENOS_AIRES, "En curso", now)).toBe("12:05 · En curso");
   });
