@@ -54,7 +54,7 @@ export function AuthScreen({ client }: AuthScreenProps) {
     <main className="shell">
       <h1>{es.appName}</h1>
       <LocalBanner />
-      <form className="card stack" onSubmit={submit}>
+      <form className="card stack" noValidate onSubmit={submit}>
         <label>
           {es.email}
           <input
