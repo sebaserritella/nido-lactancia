@@ -39,7 +39,7 @@ begin
   insert into public.household_members (household_id, user_id)
   values (hid, auth.uid());
   insert into public.invites (household_id, code, expires_at)
-  values (hid, encode(gen_random_bytes(16), 'hex'), now() + interval '7 days');
+  values (hid, encode(extensions.gen_random_bytes(16), 'hex'), now() + interval '7 days');
   return hid;
 end;
 $$;
@@ -107,7 +107,7 @@ begin
     raise exception 'not in a household';
   end if;
 
-  new_code := encode(gen_random_bytes(16), 'hex');
+  new_code := encode(extensions.gen_random_bytes(16), 'hex');
   insert into public.invites (household_id, code, expires_at)
   values (hid, new_code, now() + interval '7 days');
   return new_code;
