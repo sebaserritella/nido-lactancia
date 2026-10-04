@@ -1,0 +1,135 @@
+:root {
+  color-scheme: light;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background: #f3ecdf;
+  color: #241c18;
+  line-height: 1.4;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+}
+
+button, input {
+  font: inherit;
+}
+
+button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 16px;
+  background: #9c3d2e;
+  color: #fffaf6;
+}
+
+button.ghost, button.selected {
+  background: transparent;
+  color: #241c18;
+  border: 1px solid #ddcfc0;
+}
+
+button.selected {
+  background: #241c18;
+  color: #fffaf6;
+  border-color: #241c18;
+}
+
+button:disabled { opacity: 0.5; }
+
+input {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  border: 1px solid #ddcfc0;
+  border-radius: 12px;
+  padding: 0 12px;
+  background: #fffdf9;
+  color: inherit;
+}
+
+.shell {
+  width: min(32rem, 100%);
+  margin: 0 auto;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 16px;
+}
+
+.card {
+  background: #fffdf9;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 1px 0 rgba(36, 28, 24, 0.04);
+}
+
+.stack, form.stack { display: grid; gap: 12px; }
+
+label { display: grid; font-size: 0.95rem; }
+
+.topbar, .row-actions, .choice, .tabs, .dates, .inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.topbar { justify-content: space-between; }
+
+.topbar h1, h1 { font-size: 1.6rem; margin: 0; }
+
+h2 { font-size: 1rem; margin: 0 0 8px; }
+
+.choice, .tabs { flex-wrap: wrap; }
+
+.choice button, .tabs button { flex: 1; }
+
+.inline input { margin-top: 0; }
+
+.timer {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 3rem;
+  letter-spacing: -0.04em;
+}
+
+.muted { color: #6e625a; margin: 0; }
+
+.banner {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f3e2c4;
+  color: #5c3b16;
+}
+
+.error { color: #9c3d2e; margin: 0; }
+
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+
+.entries { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+
+.entries li {
+  background: #fffdf9;
+  border-radius: 16px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.entries.plain li { background: transparent; padding: 8px 0; }
+
+.entries li div:first-child { display: grid; }
+
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.stats p { margin: 0; display: grid; }
+
+.stats .muted { grid-column: 1 / -1; }
+
+details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
