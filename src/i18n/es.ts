@@ -68,7 +68,7 @@ export const es = {
   bothPerDay: "Ambos por día",
   meanGap: "Tiempo entre tomas",
   noData: "sin datos",
-  statsNote: "Los días del rango sin registros entran en el promedio.",
+  statsNote: "Los días sin registros de esa estadística no entran en el promedio.",
   emptyRange: "No hay registros en esas fechas.",
   invalidRange: "La fecha desde tiene que ser anterior o igual que hasta.",
   inviteAgain: "Generar otro código",

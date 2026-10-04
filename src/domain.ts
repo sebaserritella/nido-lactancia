@@ -27,10 +27,10 @@ export type Diaper = {
 export type RangeStats = {
   day_count: number;
   feed_count: number;
-  feeds_per_day: number;
+  feeds_per_day: number | null;
   minutes_per_feed: number | null;
-  pee_per_day: number;
-  poop_per_day: number;
-  both_diapers_per_day: number;
+  pee_per_day: number | null;
+  poop_per_day: number | null;
+  both_diapers_per_day: number | null;
   mean_gap_minutes: number | null;
 };

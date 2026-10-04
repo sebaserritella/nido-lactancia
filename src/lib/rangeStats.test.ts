@@ -24,7 +24,7 @@ describe("range_stats_for_household", () => {
       create or replace function auth.uid() returns uuid
       language sql stable as $$ select null::uuid $$;
     `);
-    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql"]) {
+    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql"]) {
       await db.exec(readFileSync(join(root, file), "utf8"));
     }
     await db.exec(`
@@ -59,22 +59,64 @@ describe("range_stats_for_household", () => {
     const stats = result.rows[0].stats;
     expect(stats.day_count).toBe(3);
     expect(stats.feed_count).toBe(3);
-    expect(stats.feeds_per_day).toBeCloseTo(1);
+    expect(stats.feeds_per_day).toBeCloseTo(1.5);
     expect(stats.minutes_per_feed).toBeCloseTo(19);
-    expect(stats.pee_per_day).toBeCloseTo(2 / 3);
-    expect(stats.poop_per_day).toBe(0);
-    expect(stats.both_diapers_per_day).toBeCloseTo(1 / 3);
+    expect(stats.pee_per_day).toBe(1);
+    expect(stats.poop_per_day).toBeNull();
+    expect(stats.both_diapers_per_day).toBe(1);
     expect(stats.mean_gap_minutes).toBeCloseTo(745);
+  });
+
+  it("skips days without that statistic and keeps a short feed under one minute", async () => {
+    const otherBabyId = "33333333-3333-3333-3333-333333333333";
+    await db.exec(`
+      insert into babies (id, household_id, name)
+      values ('${otherBabyId}', '${householdId}', 'Sol');
+      insert into feeds (household_id, baby_id, started_at, ended_at, side, created_by)
+      values ('${householdId}', '${otherBabyId}', '2026-10-01T15:00:00Z', '2026-10-01T15:00:30Z', 'left', '${userId}');
+      insert into diapers (household_id, baby_id, occurred_at, kind, created_by)
+      values
+        ('${householdId}', '${otherBabyId}', '2026-10-01T15:00:00Z', 'poop', '${userId}'),
+        ('${householdId}', '${otherBabyId}', '2026-10-02T15:00:00Z', 'pee', '${userId}'),
+        ('${householdId}', '${otherBabyId}', '2026-10-02T18:00:00Z', 'pee', '${userId}');
+    `);
+    const result = await db.query<{ stats: Stats }>(
+      `select range_stats_for_household($1, $2, '2026-10-01', '2026-10-03', 'America/Argentina/Buenos_Aires') as stats`,
+      [householdId, otherBabyId],
+    );
+    const stats = result.rows[0].stats;
+    expect(stats.feeds_per_day).toBe(1);
+    expect(stats.minutes_per_feed).toBeCloseTo(0.5);
+    expect(stats.pee_per_day).toBe(2);
+    expect(stats.poop_per_day).toBe(1);
+    expect(stats.both_diapers_per_day).toBeNull();
+    expect(stats.mean_gap_minutes).toBeNull();
+  });
+
+  it("returns no per-day rate when the range has no records", async () => {
+    const result = await db.query<{ stats: Stats }>(
+      `select range_stats_for_household($1, $2, '2026-09-01', '2026-09-03', 'America/Argentina/Buenos_Aires') as stats`,
+      [householdId, babyId],
+    );
+    const stats = result.rows[0].stats;
+    expect(stats.day_count).toBe(3);
+    expect(stats.feed_count).toBe(0);
+    expect(stats.feeds_per_day).toBeNull();
+    expect(stats.minutes_per_feed).toBeNull();
+    expect(stats.pee_per_day).toBeNull();
+    expect(stats.poop_per_day).toBeNull();
+    expect(stats.both_diapers_per_day).toBeNull();
+    expect(stats.mean_gap_minutes).toBeNull();
   });
 });
 
 type Stats = {
   day_count: number;
   feed_count: number;
-  feeds_per_day: number;
-  minutes_per_feed: number;
-  pee_per_day: number;
-  poop_per_day: number;
-  both_diapers_per_day: number;
+  feeds_per_day: number | null;
+  minutes_per_feed: number | null;
+  pee_per_day: number | null;
+  poop_per_day: number | null;
+  both_diapers_per_day: number | null;
   mean_gap_minutes: number | null;
 };

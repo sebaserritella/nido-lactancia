@@ -38,19 +38,37 @@ export function computeRangeStats(
       (new Date(rangedFeeds[index].started_at).getTime() - new Date(rangedFeeds[index - 1].started_at).getTime()) / 60000,
     );
   }
-  const pee = rangedDiapers.filter((diaper) => diaper.kind === "pee").length;
-  const poop = rangedDiapers.filter((diaper) => diaper.kind === "poop").length;
-  const both = rangedDiapers.filter((diaper) => diaper.kind === "both").length;
   return {
     day_count: dayCount,
     feed_count: rangedFeeds.length,
-    feeds_per_day: rangedFeeds.length / dayCount,
+    feeds_per_day: perRecordedDay(
+      rangedFeeds.length,
+      rangedFeeds.map((feed) => localDay(feed.started_at, timeZone)),
+    ),
     minutes_per_feed: minutes.length === 0 ? null : average(minutes),
-    pee_per_day: pee / dayCount,
-    poop_per_day: poop / dayCount,
-    both_diapers_per_day: both / dayCount,
+    pee_per_day: diaperRate(rangedDiapers, "pee", timeZone),
+    poop_per_day: diaperRate(rangedDiapers, "poop", timeZone),
+    both_diapers_per_day: diaperRate(rangedDiapers, "both", timeZone),
     mean_gap_minutes: gaps.length === 0 ? null : average(gaps),
   };
+}
+
+function diaperRate(diapers: DiaperPoint[], kind: DiaperKind, timeZone: string): number | null {
+  const matching = diapers.filter((diaper) => diaper.kind === kind);
+  return perRecordedDay(
+    matching.length,
+    matching.map((diaper) => localDay(diaper.occurred_at, timeZone)),
+  );
+}
+
+function perRecordedDay(count: number, days: string[]): number | null {
+  const recordedDays = new Set(days).size;
+  if (recordedDays === 0) return null;
+  return count / recordedDays;
+}
+
+function localDay(isoUtc: string, timeZone: string): string {
+  return todayLocalDate(timeZone, new Date(isoUtc));
 }
 
 function inRange(isoUtc: string, from: string, to: string, timeZone: string): boolean {

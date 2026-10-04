@@ -24,11 +24,44 @@ describe("computeRangeStats", () => {
     );
     expect(stats.day_count).toBe(3);
     expect(stats.feed_count).toBe(3);
-    expect(stats.feeds_per_day).toBeCloseTo(1);
+    expect(stats.feeds_per_day).toBeCloseTo(1.5);
     expect(stats.minutes_per_feed).toBeCloseTo(19);
-    expect(stats.pee_per_day).toBeCloseTo(2 / 3);
-    expect(stats.poop_per_day).toBe(0);
-    expect(stats.both_diapers_per_day).toBeCloseTo(1 / 3);
+    expect(stats.pee_per_day).toBe(1);
+    expect(stats.poop_per_day).toBeNull();
+    expect(stats.both_diapers_per_day).toBe(1);
     expect(stats.mean_gap_minutes).toBeCloseTo(745);
+  });
+
+  it("skips days without that statistic and keeps a short feed under one minute", () => {
+    const stats = computeRangeStats(
+      [{ baby_id: babyId, started_at: "2026-10-01T15:00:00Z", ended_at: "2026-10-01T15:00:30Z" }],
+      [
+        { baby_id: babyId, occurred_at: "2026-10-01T15:00:00Z", kind: "poop" },
+        { baby_id: babyId, occurred_at: "2026-10-02T15:00:00Z", kind: "pee" },
+        { baby_id: babyId, occurred_at: "2026-10-02T18:00:00Z", kind: "pee" },
+      ],
+      babyId,
+      "2026-10-01",
+      "2026-10-03",
+      "America/Argentina/Buenos_Aires",
+    );
+    expect(stats.feeds_per_day).toBe(1);
+    expect(stats.minutes_per_feed).toBeCloseTo(0.5);
+    expect(stats.pee_per_day).toBe(2);
+    expect(stats.poop_per_day).toBe(1);
+    expect(stats.both_diapers_per_day).toBeNull();
+    expect(stats.mean_gap_minutes).toBeNull();
+  });
+
+  it("returns no per-day rate when the range has no records", () => {
+    const stats = computeRangeStats([], [], babyId, "2026-10-01", "2026-10-03", "America/Argentina/Buenos_Aires");
+    expect(stats.day_count).toBe(3);
+    expect(stats.feed_count).toBe(0);
+    expect(stats.feeds_per_day).toBeNull();
+    expect(stats.minutes_per_feed).toBeNull();
+    expect(stats.pee_per_day).toBeNull();
+    expect(stats.poop_per_day).toBeNull();
+    expect(stats.both_diapers_per_day).toBeNull();
+    expect(stats.mean_gap_minutes).toBeNull();
   });
 });
