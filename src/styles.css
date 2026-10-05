@@ -233,103 +233,105 @@ button.with-icon {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
-.time-chart {
+.day-picker {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
-  column-gap: 8px;
-  row-gap: 10px;
-  align-items: center;
-}
-
-.chart-nav {
-  width: 44px;
-  min-width: 44px;
-  padding: 0;
-  font-size: 1.6rem;
-  line-height: 1;
-}
-
-.y-axis {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 140px;
-  font-size: 0.75rem;
-  color: #6e625a;
-  text-align: right;
-}
-
-.plot-scroll {
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
-
-.plot {
-  display: flex;
-  align-items: flex-end;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
-  min-width: 100%;
-}
-
-.column {
-  width: 36px;
-  flex: none;
-  display: flex;
-  flex-direction: column;
   align-items: center;
 }
 
-.bar-slot {
-  height: 140px;
-  width: 22px;
-  display: flex;
-  align-items: flex-end;
+.day-picker input {
+  margin-top: 0;
 }
 
-.stack-bar {
-  width: 22px;
-  min-height: 0;
-  display: flex;
-  flex-direction: column-reverse;
-  border-radius: 6px 6px 0 0;
+button.day-jump {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 12px;
+  background: transparent;
+  color: #241c18;
+  border: 1px solid transparent;
+}
+
+button.day-jump.selected {
+  background: #241c18;
+  color: #fffaf6;
+  border-color: #241c18;
+}
+
+.day-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.timeline-lane {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.timeline-name {
+  font-size: 0.8rem;
+  color: #6e625a;
+}
+
+.timeline-track {
+  position: relative;
+  height: 28px;
+  background: #f4ebe3;
+  border-radius: 8px;
   overflow: hidden;
 }
 
-.stack-bar span {
-  display: block;
-  min-height: 0;
+.hour-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #ddcfc0;
+  pointer-events: none;
 }
 
-.x-label {
-  margin-top: 4px;
+.feed-bar {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  height: 20px;
+  min-width: 8px;
+  border-radius: 6px;
+}
+
+.diaper-mark {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  width: 12px;
+  height: 20px;
+  margin-left: -6px;
+  border-radius: 4px;
+  background: #3d6f9c;
+}
+
+.diaper-mark.poop {
+  background: #8a5a3a;
+}
+
+.diaper-mark.both {
+  background: linear-gradient(90deg, #3d6f9c 50%, #8a5a3a 50%);
+}
+
+.timeline-axis {
+  position: relative;
+  height: 1rem;
+  margin-left: calc(5.5rem + 8px);
+}
+
+.hour-label {
+  position: absolute;
+  transform: translateX(-50%);
   font-size: 0.7rem;
   color: #6e625a;
-}
-
-.chart-legend {
-  grid-column: 1 / -1;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-}
-
-.chart-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  background: transparent;
-}
-
-.swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 4px;
-  flex: none;
 }
 
 .segment button {

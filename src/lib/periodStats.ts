@@ -5,7 +5,7 @@ import { addCalendarDays, todayLocalDate } from "./localTime";
 export type StatGrain = "day" | "week" | "month";
 
 export type Portion = {
-  key: FeedSide | DiaperKind;
+  key: "left" | "right" | "pee" | "poop";
   total: number;
   perPeriod: number;
   share: number;
@@ -15,10 +15,8 @@ export type PeriodBucket = {
   key: string;
   leftMinutes: number;
   rightMinutes: number;
-  bothSideMinutes: number;
   pee: number;
   poop: number;
-  bothDiapers: number;
 };
 
 export type PeriodStats = {
@@ -47,8 +45,8 @@ type DiaperPoint = {
   kind: DiaperKind;
 };
 
-const sideOrder: FeedSide[] = ["left", "right", "both"];
-const diaperOrder: DiaperKind[] = ["pee", "poop", "both"];
+const sideOrder = ["left", "right"] as const;
+const diaperOrder = ["pee", "poop"] as const;
 
 export function summarizePeriod(
   feeds: FeedPoint[],
@@ -72,14 +70,17 @@ export function summarizePeriod(
   const feedPeriods = new Set(completed.map((feed) => periodKey(localDay(feed.started_at, timeZone), grain)));
   const diaperPeriods = new Set(rangedDiapers.map((diaper) => periodKey(localDay(diaper.occurred_at, timeZone), grain)));
 
-  const sideTotals = new Map<FeedSide, number>(sideOrder.map((side) => [side, 0]));
+  const sideTotals = new Map<(typeof sideOrder)[number], number>(sideOrder.map((side) => [side, 0]));
+  let actualMinutes = 0;
   for (const feed of completed) {
     const minutes = activeMinutes(feed);
-    sideTotals.set(feed.side, (sideTotals.get(feed.side) ?? 0) + minutes);
+    actualMinutes += minutes;
+    addSideMinutes(sideTotals, feed.side, minutes);
   }
-  const diaperTotals = new Map<DiaperKind, number>(diaperOrder.map((kind) => [kind, 0]));
+  const diaperTotals = new Map<(typeof diaperOrder)[number], number>(diaperOrder.map((kind) => [kind, 0]));
   for (const diaper of rangedDiapers) {
-    diaperTotals.set(diaper.kind, (diaperTotals.get(diaper.kind) ?? 0) + 1);
+    if (diaper.kind === "pee" || diaper.kind === "both") diaperTotals.set("pee", (diaperTotals.get("pee") ?? 0) + 1);
+    if (diaper.kind === "poop" || diaper.kind === "both") diaperTotals.set("poop", (diaperTotals.get("poop") ?? 0) + 1);
   }
 
   const sidePortions = portions(sideOrder, sideTotals, feedPeriods.size);
@@ -88,10 +89,10 @@ export function summarizePeriod(
   return {
     grain,
     feedPeriodCount: feedPeriods.size,
-    minutesPerPeriod: rate(sidePortions, feedPeriods.size),
+    minutesPerPeriod: feedPeriods.size === 0 ? null : actualMinutes / feedPeriods.size,
     sidePortions,
     diaperPeriodCount: diaperPeriods.size,
-    diapersPerPeriod: rate(diaperPortions, diaperPeriods.size),
+    diapersPerPeriod: diaperPeriods.size === 0 ? null : rangedDiapers.length / diaperPeriods.size,
     diaperPortions,
     buckets: buildBuckets(completed, rangedDiapers, from, to, timeZone, grain),
   };
@@ -103,7 +104,12 @@ export function shiftRange(from: string, to: string, direction: -1 | 1): { from:
   return { from: addCalendarDays(from, delta), to: addCalendarDays(to, delta) };
 }
 
-function portions<Key extends Portion["key"]>(order: Key[], totals: Map<Key, number>, periodCount: number): Portion[] {
+function addSideMinutes(totals: Map<"left" | "right", number>, side: FeedSide, minutes: number) {
+  if (side === "left" || side === "both") totals.set("left", (totals.get("left") ?? 0) + minutes);
+  if (side === "right" || side === "both") totals.set("right", (totals.get("right") ?? 0) + minutes);
+}
+
+function portions<Key extends Portion["key"]>(order: readonly Key[], totals: Map<Key, number>, periodCount: number): Portion[] {
   const total = order.reduce((sum, key) => sum + (totals.get(key) ?? 0), 0);
   if (periodCount === 0 || total <= 0) return [];
   return order
@@ -117,11 +123,6 @@ function portions<Key extends Portion["key"]>(order: Key[], totals: Map<Key, num
         share: amount / total,
       };
     });
-}
-
-function rate(items: Portion[], periodCount: number): number | null {
-  if (periodCount === 0 || items.length === 0) return null;
-  return items.reduce((sum, item) => sum + item.total, 0) / periodCount;
 }
 
 function periodKey(localDate: string, grain: StatGrain): string {
@@ -152,22 +153,20 @@ function buildBuckets(
     const bucket = byKey.get(periodKey(localDay(feed.started_at, timeZone), grain));
     if (!bucket || feed.ended_at === null) continue;
     const minutes = activeMinutes(feed);
-    if (feed.side === "left") bucket.leftMinutes += minutes;
-    else if (feed.side === "right") bucket.rightMinutes += minutes;
-    else bucket.bothSideMinutes += minutes;
+    if (feed.side === "left" || feed.side === "both") bucket.leftMinutes += minutes;
+    if (feed.side === "right" || feed.side === "both") bucket.rightMinutes += minutes;
   }
   for (const diaper of diapers) {
     const bucket = byKey.get(periodKey(localDay(diaper.occurred_at, timeZone), grain));
     if (!bucket) continue;
-    if (diaper.kind === "pee") bucket.pee += 1;
-    else if (diaper.kind === "poop") bucket.poop += 1;
-    else bucket.bothDiapers += 1;
+    if (diaper.kind === "pee" || diaper.kind === "both") bucket.pee += 1;
+    if (diaper.kind === "poop" || diaper.kind === "both") bucket.poop += 1;
   }
   return keys.map((key) => byKey.get(key) ?? emptyBucket(key));
 }
 
 function emptyBucket(key: string): PeriodBucket {
-  return { key, leftMinutes: 0, rightMinutes: 0, bothSideMinutes: 0, pee: 0, poop: 0, bothDiapers: 0 };
+  return { key, leftMinutes: 0, rightMinutes: 0, pee: 0, poop: 0 };
 }
 
 function periodKeysInRange(from: string, to: string, grain: StatGrain): string[] {

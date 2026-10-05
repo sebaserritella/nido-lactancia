@@ -47,15 +47,23 @@ export function computeRangeStats(
       rangedFeeds.map((feed) => localDay(feed.started_at, timeZone)),
     ),
     minutes_per_feed: minutes.length === 0 ? null : average(minutes),
-    pee_per_day: diaperRate(rangedDiapers, "pee", timeZone),
-    poop_per_day: diaperRate(rangedDiapers, "poop", timeZone),
-    both_diapers_per_day: diaperRate(rangedDiapers, "both", timeZone),
+    pee_per_day: diaperRate(rangedDiapers, ["pee", "both"], timeZone),
+    poop_per_day: diaperRate(rangedDiapers, ["poop", "both"], timeZone),
+    both_diapers_per_day: diaperRate(rangedDiapers, ["both"], timeZone),
     mean_gap_minutes: gaps.length === 0 ? null : average(gaps),
   };
 }
 
-function diaperRate(diapers: DiaperPoint[], kind: DiaperKind, timeZone: string): number | null {
-  const matching = diapers.filter((diaper) => diaper.kind === kind);
+/** Each diaper change counts once. Days with no diaper are left out of the rate. */
+export function diapersChangedPerDay(diapers: { occurred_at: string }[], timeZone: string): number | null {
+  return perRecordedDay(
+    diapers.length,
+    diapers.map((diaper) => localDay(diaper.occurred_at, timeZone)),
+  );
+}
+
+function diaperRate(diapers: DiaperPoint[], kinds: DiaperKind[], timeZone: string): number | null {
+  const matching = diapers.filter((diaper) => kinds.includes(diaper.kind));
   return perRecordedDay(
     matching.length,
     matching.map((diaper) => localDay(diaper.occurred_at, timeZone)),

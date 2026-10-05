@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRangeStats } from "./computeRangeStats";
+import { computeRangeStats, diapersChangedPerDay } from "./computeRangeStats";
 
 const babyId = "22222222-2222-2222-2222-222222222222";
 
@@ -27,9 +27,27 @@ describe("computeRangeStats", () => {
     expect(stats.feeds_per_day).toBeCloseTo(1.5);
     expect(stats.minutes_per_feed).toBeCloseTo(19);
     expect(stats.pee_per_day).toBe(1);
-    expect(stats.poop_per_day).toBeNull();
+    expect(stats.poop_per_day).toBe(1);
     expect(stats.both_diapers_per_day).toBe(1);
     expect(stats.mean_gap_minutes).toBeCloseTo(745);
+    expect(diapersChangedPerDay(
+      [
+        { occurred_at: "2026-10-01T15:00:00Z" },
+        { occurred_at: "2026-10-02T15:00:00Z" },
+        { occurred_at: "2026-10-03T15:00:00Z" },
+      ],
+      "America/Argentina/Buenos_Aires",
+    )).toBe(1);
+  });
+
+  it("counts each diaper change once, including a both diaper", () => {
+    expect(
+      diapersChangedPerDay(
+        [{ occurred_at: "2026-10-01T15:00:00Z" }, { occurred_at: "2026-10-01T18:00:00Z" }],
+        "America/Argentina/Buenos_Aires",
+      ),
+    ).toBe(2);
+    expect(diapersChangedPerDay([], "America/Argentina/Buenos_Aires")).toBeNull();
   });
 
   it("subtracts paused minutes from the feed average", () => {

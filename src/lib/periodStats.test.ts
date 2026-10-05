@@ -32,17 +32,17 @@ describe("summarizePeriod", () => {
 
     expect(stats.diaperPeriodCount).toBe(3);
     expect(stats.diapersPerPeriod).toBeCloseTo(1);
-    expect(stats.diaperPortions.map((portion) => portion.key)).toEqual(["pee", "both"]);
-    expect(stats.diaperPortions[0].total).toBe(2);
-    expect(stats.diaperPortions[0].perPeriod).toBeCloseTo(2 / 3);
-    expect(stats.diaperPortions[0].share).toBeCloseTo(2 / 3);
+    expect(stats.diaperPortions.map((portion) => portion.key)).toEqual(["pee", "poop"]);
+    expect(stats.diaperPortions[0].total).toBe(3);
+    expect(stats.diaperPortions[0].perPeriod).toBeCloseTo(1);
+    expect(stats.diaperPortions[0].share).toBeCloseTo(3 / 4);
     expect(stats.diaperPortions[1].total).toBe(1);
-    expect(stats.diaperPortions[1].share).toBeCloseTo(1 / 3);
+    expect(stats.diaperPortions[1].share).toBeCloseTo(1 / 4);
 
     expect(stats.buckets.map((bucket) => bucket.key)).toEqual(["2026-10-01", "2026-10-02", "2026-10-03"]);
-    expect(stats.buckets[0]).toMatchObject({ leftMinutes: 18, rightMinutes: 20, bothSideMinutes: 0, pee: 1, poop: 0, bothDiapers: 0 });
-    expect(stats.buckets[1]).toMatchObject({ leftMinutes: 0, rightMinutes: 0, bothSideMinutes: 0, pee: 1, bothDiapers: 0 });
-    expect(stats.buckets[2]).toMatchObject({ leftMinutes: 0, pee: 0, bothDiapers: 1 });
+    expect(stats.buckets[0]).toMatchObject({ leftMinutes: 18, rightMinutes: 20, pee: 1, poop: 0 });
+    expect(stats.buckets[1]).toMatchObject({ leftMinutes: 0, rightMinutes: 0, pee: 1, poop: 0 });
+    expect(stats.buckets[2]).toMatchObject({ leftMinutes: 0, pee: 1, poop: 1 });
   });
 
   it("uses one week and one month when the recorded days share them", () => {
@@ -53,13 +53,13 @@ describe("summarizePeriod", () => {
     expect(week.minutesPerPeriod).toBeCloseTo(38);
     expect(week.diaperPeriodCount).toBe(1);
     expect(week.diapersPerPeriod).toBeCloseTo(3);
-    expect(week.diaperPortions[0].perPeriod).toBeCloseTo(2);
+    expect(week.diaperPortions[0].perPeriod).toBeCloseTo(3);
 
     expect(month.feedPeriodCount).toBe(1);
     expect(month.minutesPerPeriod).toBeCloseTo(38);
     expect(month.diapersPerPeriod).toBeCloseTo(3);
     expect(week.buckets.map((bucket) => bucket.key)).toEqual(["2026-09-28"]);
-    expect(week.buckets[0]).toMatchObject({ leftMinutes: 18, rightMinutes: 20, pee: 2, bothDiapers: 1 });
+    expect(week.buckets[0]).toMatchObject({ leftMinutes: 18, rightMinutes: 20, pee: 3, poop: 1 });
     expect(month.buckets.map((bucket) => bucket.key)).toEqual(["2026-10"]);
   });
 
@@ -76,7 +76,9 @@ describe("summarizePeriod", () => {
     expect(weeks.minutesPerPeriod).toBeCloseTo(50 / 3);
     expect(months.feedPeriodCount).toBe(2);
     expect(months.minutesPerPeriod).toBeCloseTo(25);
-    expect(months.sidePortions.map((portion) => portion.key)).toEqual(["left", "right", "both"]);
+    expect(months.sidePortions.map((portion) => portion.key)).toEqual(["left", "right"]);
+    expect(months.sidePortions.find((portion) => portion.key === "left")?.total).toBeCloseTo(40);
+    expect(months.sidePortions.find((portion) => portion.key === "right")?.total).toBeCloseTo(40);
   });
 
   it("ignores an open feed and returns no rates when nothing was recorded", () => {

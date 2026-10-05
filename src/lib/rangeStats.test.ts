@@ -24,7 +24,7 @@ describe("range_stats_for_household", () => {
       create or replace function auth.uid() returns uuid
       language sql stable as $$ select null::uuid $$;
     `);
-    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql", "0008_feed_pause.sql"]) {
+    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql", "0008_feed_pause.sql", "0009_both_counts_twice.sql"]) {
       await db.exec(readFileSync(join(root, file), "utf8"));
     }
     await db.exec(`
@@ -62,7 +62,7 @@ describe("range_stats_for_household", () => {
     expect(stats.feeds_per_day).toBeCloseTo(1.5);
     expect(stats.minutes_per_feed).toBeCloseTo(19);
     expect(stats.pee_per_day).toBe(1);
-    expect(stats.poop_per_day).toBeNull();
+    expect(stats.poop_per_day).toBe(1);
     expect(stats.both_diapers_per_day).toBe(1);
     expect(stats.mean_gap_minutes).toBeCloseTo(745);
   });

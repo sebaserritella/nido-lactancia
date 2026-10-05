@@ -1,0 +1,18 @@
+---
+description: Apply Supabase migrations on the live project when deploying or when save fails
+alwaysApply: true
+---
+
+# Apply the database change
+
+"No se pudo guardar. Probá de nuevo." is the generic fallback in `src/lib/errors.ts`. Read the real Postgres error before explaining it.
+
+If the live app fails because code selects or writes columns from `supabase/migrations/` that are not on the Nido lactancy Supabase project yet (for example `42703`, column does not exist):
+
+1. Apply that migration yourself on the live project. Do not stop after telling the user to paste the SQL.
+2. Confirm a REST select of the new columns returns 200, not 42703.
+3. Then say it is fixed.
+
+The same step belongs to "deploy" or "subilo" whenever the commit adds or changes a migration. Pushing GitHub Pages is not enough: the shared database has to match the deployed client.
+
+`npm run check:live-schema` runs in the Pages workflow before the site is published. If it fails, apply the pending migration and re-run. Do not skip or delete that check.

@@ -7,7 +7,8 @@ import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
 import { activeElapsedMs, activeMinutes, closePause } from "../lib/feedDuration";
-import { formatElapsed, formatMinutes } from "../lib/format";
+import { summarizeDay } from "../lib/daySummary";
+import { formatElapsed, formatMinutes, formatStat } from "../lib/format";
 import { validateFeedInterval } from "../lib/feedRules";
 import { localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue, zonedTimeToUtc } from "../lib/localTime";
 import { WeightSection } from "./WeightSection";
@@ -303,6 +304,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
         )}
         {error ? <p className="error">{error}</p> : null}
       </section>
+      <DaySummary feeds={feeds} diapers={diapers} />
       <section className="stack">
         <h2 className="section-title">
           <FeedIcon />
@@ -389,6 +391,50 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     </div>
   );
 }
+
+function DaySummary({ feeds, diapers }: { feeds: Feed[]; diapers: Diaper[] }) {
+  const summary = summarizeDay(feeds, diapers);
+  return (
+    <section className="card stack" aria-label={es.daySummary}>
+      <h2>{es.daySummary}</h2>
+      <div className="stats">
+        <p className="stat-line">
+          <span className="muted">{es.feedsCount}</span>
+          <strong>{formatStat(summary.feedCount)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.minutesTotal}</span>
+          <strong>{formatMinutes(summary.minutes)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.left}</span>
+          <strong>{formatMinutes(summary.leftMinutes)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.right}</span>
+          <strong>{formatMinutes(summary.rightMinutes)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.meanGap}</span>
+          <strong>{formatMinutes(summary.meanGapMinutes) ?? es.noData}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.diaperChanges}</span>
+          <strong>{formatStat(summary.diaperChanges)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.pee}</span>
+          <strong>{formatStat(summary.pee)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.poop}</span>
+          <strong>{formatStat(summary.poop)}</strong>
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function FeedForm({
   initialStart,
   initialEnd,

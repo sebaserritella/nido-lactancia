@@ -190,7 +190,7 @@ function WeightForm({
         <input
           required
           inputMode="decimal"
-          placeholder="3,4"
+          placeholder="3,270"
           value={kg}
           onChange={(event) => setKg(event.target.value)}
         />

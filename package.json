@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:live-schema": "CHECK_LIVE_SCHEMA=1 vitest run src/lib/liveSchema.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
