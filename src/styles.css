@@ -288,19 +288,22 @@ button.day-jump.selected {
 }
 
 .day-timeline {
+  --lane-label: 3.4rem;
   display: grid;
   gap: 8px;
+  width: 100%;
 }
 
 .timeline-lane {
   display: grid;
-  grid-template-columns: 5.5rem minmax(0, 1fr);
+  grid-template-columns: var(--lane-label) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .timeline-name {
-  font-size: 0.8rem;
+  font-size: 0.62rem;
+  line-height: 1.1;
   color: #6e625a;
 }
 
@@ -363,7 +366,7 @@ button.day-jump.selected {
 .timeline-axis {
   position: relative;
   height: 1rem;
-  margin-left: calc(5.5rem + 8px);
+  margin-left: calc(var(--lane-label) + 4px);
 }
 
 .hour-label {

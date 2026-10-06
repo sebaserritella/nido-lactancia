@@ -6,7 +6,9 @@ import { es } from "../i18n/es";
 import { birthDateIssue, formatBabyAge, formatCalendarDate } from "../lib/age";
 import { normalizeEmail } from "../lib/email";
 import { messageForError } from "../lib/errors";
+import { readSupabaseEnv } from "../lib/env";
 import { todayLocalDate } from "../lib/localTime";
+import { openingState, rememberBabies, rememberTab } from "../lib/resume";
 import { HistoryPanel } from "./HistoryPanel";
 import { TodayPanel } from "./TodayPanel";
 
@@ -22,9 +24,17 @@ type TrackerScreenProps = {
 };
 
 export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut }: TrackerScreenProps) {
-  const [babies, setBabies] = useState<Baby[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(() => localStorage.getItem(babyStorageKey));
-  const [tab, setTab] = useState<"today" | "history">("today");
+  const [stored] = useState(() => openingState(localStorage, readSupabaseEnv()));
+  const restored = stored.userId === userId && stored.householdId === householdId;
+  const [babies, setBabies] = useState<Baby[]>(() => (restored ? stored.babies : []));
+  const [babiesKnown, setBabiesKnown] = useState(restored);
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const saved = localStorage.getItem(babyStorageKey);
+    if (!restored) return saved;
+    if (saved && stored.babies.some((baby) => baby.id === saved)) return saved;
+    return stored.babies[0]?.id ?? null;
+  });
+  const [tab, setTab] = useState<"today" | "history">(() => (restored ? stored.tab : "today"));
   const [name, setName] = useState("");
   const [bornOn, setBornOn] = useState("");
   const [editName, setEditName] = useState("");
@@ -65,6 +75,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       }
       const rows = ((data ?? []) as Baby[]).map((baby) => ({ ...baby, born_on: baby.born_on ?? null }));
       setBabies(rows);
+      setBabiesKnown(true);
       setSelectedId((current) => {
         if (current && rows.some((baby) => baby.id === current)) return current;
         return rows[0]?.id ?? null;
@@ -88,6 +99,15 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
   useEffect(() => {
     if (selectedId) localStorage.setItem(babyStorageKey, selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!babiesKnown) return;
+    rememberBabies(localStorage, userId, householdId, babies);
+  }, [babies, babiesKnown, householdId, userId]);
+
+  useEffect(() => {
+    rememberTab(localStorage, userId, tab);
+  }, [tab, userId]);
 
   async function addBaby(event: FormEvent) {
     event.preventDefault();
@@ -232,12 +252,12 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
             );
           })}
         </div>
-      ) : (
+      ) : babiesKnown ? (
         <>
           <p className="muted">{es.noBabies}</p>
           {addBabyForm("card stack")}
         </>
-      )}
+      ) : null}
       {error ? <p className="error">{error}</p> : null}
       {selected ? (
         <>

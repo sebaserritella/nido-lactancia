@@ -299,7 +299,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   return (
     <div className="stack">
-      <LatestSummary client={client} babyId={baby.id} timeZone={timeZone} refreshKey={tick} />
+      <LatestSummary client={client} userId={userId} babyId={baby.id} timeZone={timeZone} refreshKey={tick} />
       <div className="segment" role="group" aria-label={es.logMode}>
         <button type="button" aria-pressed={action === "feed"} className={action === "feed" ? "selected with-icon" : "ghost with-icon"} onClick={() => setAction("feed")}>
           <FeedIcon />

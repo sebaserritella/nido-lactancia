@@ -52,7 +52,8 @@ export function WeekTimeline({
   onSelectDay?: (day: string) => void;
 }) {
   if (days.length === 0) return null;
-  const window = hourWindow(days.flatMap((day) => eventSpans(day.feeds, day.diapers, timeZone)));
+  const spans = days.flatMap((day) => eventSpans(day.feeds, day.diapers, timeZone));
+  const window = hourWindow(spans);
   return (
     <section className="card stack">
       <h2>{es.lastWeek}</h2>
@@ -89,9 +90,9 @@ export function DayTimeline({ feeds, diapers, timeZone, window }: DayTimelinePro
     const minute = localMinutes(diaper.occurred_at, timeZone);
     return { id: diaper.id, minute, kind: diaper.kind, label: `${formatMinuteOfDay(minute)} ${diaperLabel(diaper.kind)}` };
   });
-  const axis = window ?? hourWindow(eventSpans(feeds, diapers, timeZone));
+  const spans = eventSpans(feeds, diapers, timeZone);
+  const axis = window ?? hourWindow(spans);
   const hours = hourTicks(axis);
-
   return (
     <div className="day-timeline">
       <Lane name={es.left} hours={hours} window={axis}>

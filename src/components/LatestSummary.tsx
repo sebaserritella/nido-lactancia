@@ -1,50 +1,68 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DiaperKind, FeedKind, FeedSide } from "../domain";
 import { DiaperIcon, FeedIcon } from "./EventIcons";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
 import { formatLatestFeedLine, formatLatestStamp } from "../lib/latestStamp";
+import { readResume, rememberLatest, type CachedDiaper, type CachedFeed } from "../lib/resume";
 
 type LatestSummaryProps = {
   client: SupabaseClient;
+  userId: string;
   babyId: string;
   timeZone: string;
   refreshKey: number;
 };
 
-type LatestFeed = {
-  id: string;
-  started_at: string;
-  ended_at: string | null;
-  paused_ms: number;
-  paused_at: string | null;
-  side: FeedSide | null;
-  kind: FeedKind;
-  ml: number | null;
-};
-
-type LatestDiaper = {
-  id: string;
-  occurred_at: string;
-  kind: DiaperKind;
-};
+type LatestFeed = CachedFeed;
+type LatestDiaper = CachedDiaper;
 
 const feedColumns = "id, started_at, ended_at, paused_ms, paused_at, side, kind, ml";
 const diaperColumns = "id, occurred_at, kind";
 
-export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSummaryProps) {
-  const [feed, setFeed] = useState<LatestFeed | null>(null);
-  const [diaper, setDiaper] = useState<LatestDiaper | null>(null);
-  const [ready, setReady] = useState(false);
+function normalizeFeed(value: unknown): LatestFeed | null {
+  if (!value || typeof value !== "object") return null;
+  const feed = value as LatestFeed;
+  if (feed.kind !== "breast" && feed.kind !== "bottle") return null;
+  if (feed.side !== null && feed.side !== "left" && feed.side !== "right" && feed.side !== "both") return null;
+  return {
+    id: feed.id,
+    started_at: feed.started_at,
+    ended_at: feed.ended_at ?? null,
+    paused_ms: feed.paused_ms ?? 0,
+    paused_at: feed.paused_at ?? null,
+    side: feed.side ?? null,
+    kind: feed.kind,
+    ml: feed.ml ?? null,
+  };
+}
+
+function normalizeDiaper(value: unknown): LatestDiaper | null {
+  if (!value || typeof value !== "object") return null;
+  const diaper = value as LatestDiaper;
+  if (diaper.kind !== "pee" && diaper.kind !== "poop" && diaper.kind !== "both") return null;
+  return { id: diaper.id, occurred_at: diaper.occurred_at, kind: diaper.kind };
+}
+
+function cachedLatest(userId: string, babyId: string): { feed: LatestFeed | null; diaper: LatestDiaper | null; ready: boolean } {
+  const entry = readResume(localStorage, userId)?.latest[babyId];
+  if (!entry) return { feed: null, diaper: null, ready: false };
+  return { feed: entry.feed, diaper: entry.diaper, ready: true };
+}
+
+export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: LatestSummaryProps) {
+  const [feed, setFeed] = useState<LatestFeed | null>(() => cachedLatest(userId, babyId).feed);
+  const [diaper, setDiaper] = useState<LatestDiaper | null>(() => cachedLatest(userId, babyId).diaper);
+  const [ready, setReady] = useState(() => cachedLatest(userId, babyId).ready);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setFeed(null);
-    setDiaper(null);
-    setReady(false);
+    const cached = cachedLatest(userId, babyId);
+    setFeed(cached.feed);
+    setDiaper(cached.diaper);
+    setReady(cached.ready);
     setError(null);
-  }, [babyId]);
+  }, [babyId, userId]);
 
   useEffect(() => {
     let ignore = false;
@@ -75,9 +93,12 @@ export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSu
         return;
       }
       setError(null);
-      setFeed((feedResult.data ?? null) as LatestFeed | null);
-      setDiaper((diaperResult.data ?? null) as LatestDiaper | null);
+      const nextFeed = normalizeFeed(feedResult.data);
+      const nextDiaper = normalizeDiaper(diaperResult.data);
+      setFeed(nextFeed);
+      setDiaper(nextDiaper);
       setReady(true);
+      rememberLatest(localStorage, userId, babyId, { feed: nextFeed, diaper: nextDiaper });
     }
     void load();
     const channel = client
@@ -89,7 +110,7 @@ export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSu
       ignore = true;
       void client.removeChannel(channel);
     };
-  }, [babyId, client, refreshKey, timeZone]);
+  }, [babyId, client, refreshKey, timeZone, userId]);
 
   return (
     <section className="latest">
