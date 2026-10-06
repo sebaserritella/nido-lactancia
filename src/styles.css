@@ -121,6 +121,27 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
   color: #5c3b16;
 }
 
+.analytics-notice {
+  position: fixed;
+  z-index: 2;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(32rem, calc(100% - 24px));
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: #fffdf9;
+  box-shadow: 0 8px 24px rgba(36, 28, 24, 0.16);
+}
+
+.analytics-notice p { margin: 0; }
+
+body:has(.analytics-notice) .shell {
+  padding-bottom: calc(148px + env(safe-area-inset-bottom));
+}
+
 .error { color: #9c3d2e; margin: 0; }
 
 .code {

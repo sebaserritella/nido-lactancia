@@ -6,6 +6,7 @@ import { createLocalClient } from "./lib/localClient";
 import { markLocalMode } from "./lib/localMode";
 import { createAppClient } from "./lib/supabaseClient";
 import { recoveryLinkState, type RecoveryLinkState } from "./lib/passwordRecovery";
+import { track } from "./lib/analytics";
 import { openingState, rememberHousehold } from "./lib/resume";
 import { AuthScreen, NewPasswordScreen } from "./screens/AuthScreen";
 import { FamilyScreen } from "./screens/FamilyScreen";
@@ -128,6 +129,21 @@ export function App() {
     };
   }, [client, session]);
 
+  const screen =
+    session && recovery !== "recovery" && !householdReady
+      ? "loading"
+      : recovery === "recovery" && session
+        ? "new_password"
+        : session && householdError
+          ? "household_error"
+          : session && householdReady && !householdId
+            ? "create_family"
+            : null;
+
+  useEffect(() => {
+    if (screen) track("screen_view", { screen });
+  }, [screen]);
+
   if (session && recovery !== "recovery" && !householdReady) {
     return (
       <main className="shell">
@@ -143,7 +159,14 @@ export function App() {
       <main className="shell">
         <h1>{es.appName}</h1>
         <p className="error">{householdError}</p>
-        <button type="button" className="ghost" onClick={() => void client.auth.signOut()}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            track("signed_out", { screen: "household_error" });
+            void client.auth.signOut();
+          }}
+        >
           {es.signOut}
         </button>
       </main>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
+import { track, trackAttempt } from "../lib/analytics";
 import { messageForError } from "../lib/errors";
 
 type FamilyScreenProps = {
@@ -21,8 +22,10 @@ export function FamilyScreen({ client, onSignOut, onReady }: FamilyScreenProps) 
     if (createError || typeof data !== "string") {
       setPending(false);
       setError(messageForError(createError ?? { message: "" }));
+      trackAttempt("family_created", false, createError);
       return;
     }
+    trackAttempt("family_created", true);
     onReady();
   }
 
@@ -30,7 +33,14 @@ export function FamilyScreen({ client, onSignOut, onReady }: FamilyScreenProps) 
     <main className="shell">
       <header className="topbar">
         <h1>{es.appName}</h1>
-        <button type="button" className="ghost" onClick={onSignOut}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            track("signed_out", { screen: "create_family" });
+            onSignOut();
+          }}
+        >
           {es.signOut}
         </button>
       </header>

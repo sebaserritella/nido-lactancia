@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
+import { track, trackAttempt, trackRejected } from "../lib/analytics";
 import { messageForError } from "../lib/errors";
 import { normalizeEmail } from "../lib/email";
 import { isLocalMode } from "../lib/localMode";
@@ -22,6 +23,11 @@ export function AuthScreen({ client, notice = null }: AuthScreenProps) {
   const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
+  useEffect(() => {
+    const screen = mode === "login" ? "login" : mode === "register" ? "register" : "forgot_password";
+    track("screen_view", { screen });
+  }, [mode]);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError(null);
@@ -31,11 +37,13 @@ export function AuthScreen({ client, notice = null }: AuthScreenProps) {
       normalizedEmail = normalizeEmail(email);
     } catch {
       setError(es.invalidEmail);
+      trackRejected(mode === "forgot" ? "password_reset_requested" : mode === "register" ? "sign_up" : "sign_in");
       return;
     }
     if (mode === "forgot") {
       if (isLocalMode()) {
         setError(es.recoveryLocal);
+        trackRejected("password_reset_requested");
         return;
       }
       setPending(true);
@@ -45,13 +53,16 @@ export function AuthScreen({ client, notice = null }: AuthScreenProps) {
       setPending(false);
       if (resetError) {
         setError(messageForError(resetError));
+        trackAttempt("password_reset_requested", false, resetError);
         return;
       }
+      trackAttempt("password_reset_requested", true);
       setInfo(es.resetSent);
       return;
     }
     if (password.length < 6) {
       setError(es.shortPassword);
+      trackRejected(mode === "register" ? "sign_up" : "sign_in");
       return;
     }
     setPending(true);
@@ -60,18 +71,25 @@ export function AuthScreen({ client, notice = null }: AuthScreenProps) {
       setPending(false);
       if (signUpError) {
         setError(messageForError(signUpError));
+        trackAttempt("sign_up", false, signUpError);
         return;
       }
       if (!data.session) {
         setError(es.confirmEmailOff);
+        track("sign_up", { result: "ok", reason: "needs_confirmation" });
+        return;
       }
+      trackAttempt("sign_up", true);
       return;
     }
     const { error: signInError } = await client.auth.signInWithPassword({ email: normalizedEmail, password });
     setPending(false);
     if (signInError) {
       setError(messageForError(signInError));
+      trackAttempt("sign_in", false, signInError);
+      return;
     }
+    trackAttempt("sign_in", true);
   }
 
   return (
@@ -142,10 +160,12 @@ export function NewPasswordScreen({ client, onDone }: NewPasswordScreenProps) {
     setError(null);
     if (password.length < 6) {
       setError(es.shortPassword);
+      trackRejected("password_updated");
       return;
     }
     if (password !== confirm) {
       setError(es.passwordsDiffer);
+      trackRejected("password_updated");
       return;
     }
     setPending(true);
@@ -153,8 +173,10 @@ export function NewPasswordScreen({ client, onDone }: NewPasswordScreenProps) {
     setPending(false);
     if (updateError) {
       setError(messageForError(updateError));
+      trackAttempt("password_updated", false, updateError);
       return;
     }
+    trackAttempt("password_updated", true);
     onDone();
   }
 
@@ -184,7 +206,14 @@ export function NewPasswordScreen({ client, onDone }: NewPasswordScreenProps) {
         <button type="submit" disabled={pending}>
           {es.savePassword}
         </button>
-        <button type="button" className="ghost" onClick={() => void client.auth.signOut().then(onDone)}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            track("signed_out", { screen: "new_password" });
+            void client.auth.signOut().then(onDone);
+          }}
+        >
           {es.cancel}
         </button>
       </form>

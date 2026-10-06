@@ -1,7 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { AnalyticsNotice } from "./components/AnalyticsNotice";
+import { track } from "./lib/analytics";
 import "./styles.css";
+
+track("app_opened");
 
 const root = document.getElementById("root");
 if (!root) {
@@ -10,5 +14,6 @@ if (!root) {
 createRoot(root).render(
   <StrictMode>
     <App />
+    <AnalyticsNotice />
   </StrictMode>,
 );

@@ -4,6 +4,7 @@ import type { Baby, Weight } from "../domain";
 import { es } from "../i18n/es";
 import { formatCalendarDate } from "../lib/age";
 import { messageForError } from "../lib/errors";
+import { trackRejected, trackSaved } from "../lib/analytics";
 import { todayLocalDate } from "../lib/localTime";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
 
@@ -56,6 +57,7 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
     const grams = kilogramsToGrams(kgText);
     if (grams === null) {
       setError(es.invalidWeight);
+      trackRejected("weight_logged");
       return;
     }
     setError(null);
@@ -74,9 +76,11 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
       .single();
     if (writeError || !data) {
       setError(messageForError(writeError ?? { message: "" }));
+      trackSaved("weight_logged", previousId ? "edit" : "new", false, writeError);
       return;
     }
     const saved = data as Weight;
+    trackSaved("weight_logged", previousId ? "edit" : "new", true);
     if (previousId && previousId !== saved.id) {
       const { error: deleteError } = await client.from("weights").delete().eq("id", previousId);
       if (deleteError) {

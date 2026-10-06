@@ -4,6 +4,7 @@ import type { Baby } from "../domain";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
 import { birthDateIssue, formatBabyAge, formatCalendarDate } from "../lib/age";
+import { track, trackAttempt, trackRejected } from "../lib/analytics";
 import { normalizeEmail } from "../lib/email";
 import { messageForError } from "../lib/errors";
 import { readSupabaseEnv } from "../lib/env";
@@ -109,6 +110,11 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     rememberTab(localStorage, userId, tab);
   }, [tab, userId]);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    track("screen_view", { screen: tab, babies: babies.length > 1 ? "many" : "one" });
+  }, [babies.length, selectedId, tab]);
+
   async function addBaby(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
@@ -117,6 +123,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     const issue = birthDateIssue(bornOn, today, true);
     if (issue) {
       setError(birthMessage(issue));
+      trackRejected("baby_created");
       return;
     }
     const { data, error: insertError } = await client
@@ -126,6 +133,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       .single();
     if (insertError || !data) {
       setError(messageForError(insertError ?? { message: "" }));
+      trackAttempt("baby_created", false, insertError);
       return;
     }
     const baby = { ...(data as Baby), born_on: (data as Baby).born_on ?? null };
@@ -134,6 +142,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     setName("");
     setBornOn("");
     setError(null);
+    trackAttempt("baby_created", true);
   }
 
   async function saveBaby(event: FormEvent) {
@@ -146,6 +155,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     const issue = birthDateIssue(editBornOn, today, false);
     if (issue) {
       setError(birthMessage(issue));
+      trackRejected("baby_renamed");
       return;
     }
     const nextBorn = editBornOn === "" ? null : editBornOn;
@@ -156,12 +166,14 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       .eq("id", baby.id);
     if (updateError) {
       setError(messageForError(updateError));
+      trackAttempt("baby_renamed", false, updateError);
       return;
     }
     setBabies((current) =>
       current.map((item) => (item.id === baby.id ? { ...item, name: trimmed, born_on: nextBorn } : item)),
     );
     setError(null);
+    trackAttempt("baby_renamed", true);
   }
 
   async function inviteRelative(event: FormEvent) {
@@ -173,6 +185,7 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
       email = normalizeEmail(relativeEmail);
     } catch {
       setInviteError(es.invalidEmail);
+      trackRejected("caregiver_invited");
       return;
     }
     setInvitePending(true);
@@ -180,10 +193,12 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     setInvitePending(false);
     if (sendError) {
       setInviteError(messageForError(sendError));
+      trackAttempt("caregiver_invited", false, sendError);
       return;
     }
     setRelativeEmail("");
     setInviteSent(true);
+    trackAttempt("caregiver_invited", true);
   }
 
   const selected = babies.find((baby) => baby.id === selectedId) ?? null;
@@ -225,7 +240,14 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     <main className="shell">
       <header className="topbar">
         <h1>{es.appName}</h1>
-        <button type="button" className="ghost" onClick={onSignOut}>
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => {
+            track("signed_out", { screen: tab });
+            onSignOut();
+          }}
+        >
           {es.signOut}
         </button>
       </header>

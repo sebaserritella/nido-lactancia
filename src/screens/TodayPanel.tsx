@@ -7,6 +7,7 @@ import type { Baby } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedKind, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
+import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
 import { activeElapsedMs, closePause } from "../lib/feedDuration";
 import { summarizeDay } from "../lib/daySummary";
 import { formatElapsed, formatMinutes, formatStat } from "../lib/format";
@@ -103,19 +104,21 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     };
   }, [baby.id, client, tick, timeZone]);
 
-  async function run(action: () => PromiseLike<{ error: { code?: string; message?: string } | null }>): Promise<boolean> {
+  async function run(
+    action: () => PromiseLike<{ error: { code?: string; message?: string } | null }>,
+  ): Promise<{ ok: boolean; error: { code?: string; message?: string } | null }> {
     setError(null);
     const { error: writeError } = await action();
     if (writeError) {
       setError(messageForError(writeError));
-      return false;
+      return { ok: false, error: writeError };
     }
     setTick((value) => value + 1);
-    return true;
+    return { ok: true, error: null };
   }
 
   async function startFeed() {
-    await run(() =>
+    const saved = await run(() =>
       client.from("feeds").insert({
         household_id: baby.household_id,
         baby_id: baby.id,
@@ -124,29 +127,33 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
         created_by: userId,
       }),
     );
+    trackAttempt("feed_started", saved.ok, saved.error);
   }
 
   async function pauseFeed() {
     if (!open || open.paused_at) return;
-    await run(() => client.from("feeds").update({ paused_at: new Date().toISOString() }).eq("id", open.id));
+    const saved = await run(() => client.from("feeds").update({ paused_at: new Date().toISOString() }).eq("id", open.id));
+    trackAttempt("feed_paused", saved.ok, saved.error);
   }
 
   async function resumeFeed() {
     if (!open?.paused_at) return;
     const now = Date.now();
-    await run(() => client.from("feeds").update(closePause(open, now)).eq("id", open.id));
+    const saved = await run(() => client.from("feeds").update(closePause(open, now)).eq("id", open.id));
+    trackAttempt("feed_resumed", saved.ok, saved.error);
   }
 
   async function stopFeed() {
     if (!open) return;
     const now = Date.now();
-    await run(() =>
+    const saved = await run(() =>
       client.from("feeds").update({ ...closePause(open, now), ended_at: new Date(now).toISOString() }).eq("id", open.id),
     );
+    trackAttempt("feed_stopped", saved.ok, saved.error);
   }
 
   async function logDiaper(kind: DiaperKind) {
-    await run(() =>
+    const saved = await run(() =>
       client.from("diapers").insert({
         household_id: baby.household_id,
         baby_id: baby.id,
@@ -155,6 +162,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
         created_by: userId,
       }),
     );
+    trackSaved("diaper_logged", "now", saved.ok, saved.error);
   }
 
   async function showBottle() {
@@ -177,11 +185,12 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     const ml = parseMilliliters(mlText);
     if (ml === null) {
       setError(es.invalidMl);
+      trackRejected("bottle_logged");
       return;
     }
     const iso = when.toISOString();
     const payload = { started_at: iso, ended_at: iso, side: null, kind: "bottle" as const, ml, paused_ms: 0, paused_at: null };
-    const ok = feedId
+    const saved = feedId
       ? await run(() => client.from("feeds").update(payload).eq("id", feedId))
       : await run(() =>
           client.from("feeds").insert({
@@ -191,7 +200,8 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
             created_by: userId,
           }),
         );
-    if (!ok) return;
+    trackSaved("bottle_logged", feedId ? "edit" : bottleBackfill ? "past" : "now", saved.ok, saved.error);
+    if (!saved.ok) return;
     setBottleBackfill(false);
     setBottleWhen("");
     setEditing(null);
@@ -202,10 +212,11 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     const end = endLocal === "" ? null : zonedTimeToUtc(endLocal, timeZone);
     if (validateFeedInterval(start, end) !== "ok") {
       setError(messageForError({ code: "23514" }));
+      trackRejected("feed_logged");
       return;
     }
     const payload = { started_at: start.toISOString(), ended_at: end?.toISOString() ?? null, side: nextSide };
-    const ok = feedId
+    const saved = feedId
       ? await run(() => client.from("feeds").update(payload).eq("id", feedId))
       : await run(() =>
           client.from("feeds").insert({
@@ -215,21 +226,23 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
             created_by: userId,
           }),
         );
-    if (!ok) return;
+    trackSaved("feed_logged", feedId ? "edit" : "past", saved.ok, saved.error);
+    if (!saved.ok) return;
     setBackfill(false);
     setEditing(null);
   }
 
   async function saveDiaper(id: string, local: string, kind: DiaperKind) {
-    const ok = await run(() =>
+    const saved = await run(() =>
       client.from("diapers").update({ occurred_at: zonedTimeToUtc(local, timeZone).toISOString(), kind }).eq("id", id),
     );
-    if (ok) setEditingDiaper(null);
+    trackSaved("diaper_logged", "edit", saved.ok, saved.error);
+    if (saved.ok) setEditingDiaper(null);
   }
 
   async function savePastDiaper(local: string, kind: DiaperKind) {
     if (local === "") return;
-    const ok = await run(() =>
+    const saved = await run(() =>
       client.from("diapers").insert({
         household_id: baby.household_id,
         baby_id: baby.id,
@@ -238,7 +251,8 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
         created_by: userId,
       }),
     );
-    if (ok) setDiaperBackfill(false);
+    trackSaved("diaper_logged", "past", saved.ok, saved.error);
+    if (saved.ok) setDiaperBackfill(false);
   }
 
   async function removeFeed(id: string) {
@@ -281,8 +295,8 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   }
 
   async function ungroup(sessionId: string) {
-    const ok = await run(() => client.from("feeds").update({ session_id: null }).eq("session_id", sessionId).eq("baby_id", baby.id));
-    if (ok) setSelectedIds(new Set());
+    const saved = await run(() => client.from("feeds").update({ session_id: null }).eq("session_id", sessionId).eq("baby_id", baby.id));
+    if (saved.ok) setSelectedIds(new Set());
   }
 
   async function dismissPair(earlierId: string, laterId: string) {
