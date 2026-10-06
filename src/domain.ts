@@ -1,4 +1,5 @@
 export type FeedSide = "left" | "right" | "both";
+export type FeedKind = "breast" | "bottle";
 export type DiaperKind = "pee" | "poop" | "both";
 
 export type Baby = {
@@ -24,7 +25,9 @@ export type Feed = {
   ended_at: string | null;
   paused_ms: number;
   paused_at: string | null;
-  side: FeedSide;
+  side: FeedSide | null;
+  kind: FeedKind;
+  ml: number | null;
 };
 
 export type Diaper = {

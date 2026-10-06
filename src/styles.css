@@ -321,6 +321,17 @@ button.day-jump.selected {
   background: linear-gradient(90deg, #3d6f9c 50%, #8a5a3a 50%);
 }
 
+.bottle-mark {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  width: 12px;
+  height: 20px;
+  margin-left: -6px;
+  border-radius: 4px;
+  background: #c47b2b;
+}
+
 .timeline-axis {
   position: relative;
   height: 1rem;

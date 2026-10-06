@@ -1,26 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { validateFeedInterval } from "./feedRules";
+import { parseMilliliters, previousBottleMl } from "./feedRules";
 
-describe("validateFeedInterval", () => {
-  it("accepts an open feed", () => {
-    expect(validateFeedInterval(new Date("2026-10-04T03:10:00.000Z"), null)).toBe("ok");
+const babyId = "22222222-2222-2222-2222-222222222222";
+
+describe("bottle amount", () => {
+  it("accepts a whole number of milliliters and rejects anything else", () => {
+    expect(parseMilliliters("90")).toBe(90);
+    expect(parseMilliliters(" 120 ")).toBe(120);
+    expect(parseMilliliters("")).toBeNull();
+    expect(parseMilliliters("0")).toBeNull();
+    expect(parseMilliliters("90.5")).toBeNull();
+    expect(parseMilliliters("90ml")).toBeNull();
   });
 
-  it("accepts an end after the start", () => {
+  it("prefills from the latest bottle for that baby", () => {
     expect(
-      validateFeedInterval(
-        new Date("2026-10-04T03:10:00.000Z"),
-        new Date("2026-10-04T03:28:00.000Z"),
+      previousBottleMl(
+        [
+          { baby_id: babyId, started_at: "2026-10-04T13:00:00Z", kind: "bottle", ml: 60 },
+          { baby_id: babyId, started_at: "2026-10-05T13:00:00Z", kind: "breast", ml: null },
+          { baby_id: babyId, started_at: "2026-10-05T16:00:00Z", kind: "bottle", ml: 90 },
+          { baby_id: "other", started_at: "2026-10-05T18:00:00Z", kind: "bottle", ml: 150 },
+        ],
+        babyId,
       ),
-    ).toBe("ok");
-  });
-
-  it("rejects an end that is not after the start", () => {
-    expect(
-      validateFeedInterval(
-        new Date("2026-10-04T03:10:00.000Z"),
-        new Date("2026-10-04T03:10:00.000Z"),
-      ),
-    ).toBe("end_before_start");
+    ).toBe(90);
+    expect(previousBottleMl([], babyId)).toBeNull();
   });
 });

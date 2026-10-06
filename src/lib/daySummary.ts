@@ -2,7 +2,9 @@ import { activeMinutes, type FeedClock } from "./feedDuration";
 import { todayLocalDate } from "./localTime";
 
 type DayFeed = FeedClock & {
-  side: "left" | "right" | "both";
+  side: "left" | "right" | "both" | null;
+  kind?: "breast" | "bottle";
+  ml?: number | null;
 };
 
 type DayDiaper = {
@@ -18,14 +20,23 @@ export type DaySummary = {
   diaperChanges: number;
   pee: number;
   poop: number;
+  bottleCount: number;
+  bottleMl: number;
 };
 
 /** Totals for one local day. An open feed counts as a feed and adds no minutes. A both feed adds its minutes to each breast. A both diaper counts as pee and as poop. */
 export function summarizeDay(feeds: DayFeed[], diapers: DayDiaper[]): DaySummary {
   const breasts = { left: 0, right: 0 };
   let minutes = 0;
+  let bottleCount = 0;
+  let bottleMl = 0;
   for (const feed of feeds) {
-    if (feed.ended_at === null) continue;
+    if (feed.kind === "bottle") {
+      bottleCount += 1;
+      bottleMl += feed.ml ?? 0;
+      continue;
+    }
+    if (feed.ended_at === null || feed.side === null) continue;
     const elapsed = activeMinutes(feed);
     minutes += elapsed;
     addBreastMinutes(feed.side, elapsed, breasts);
@@ -44,6 +55,8 @@ export function summarizeDay(feeds: DayFeed[], diapers: DayDiaper[]): DaySummary
     diaperChanges: diapers.length,
     pee: diapers.filter((diaper) => diaper.kind === "pee" || diaper.kind === "both").length,
     poop: diapers.filter((diaper) => diaper.kind === "poop" || diaper.kind === "both").length,
+    bottleCount,
+    bottleMl,
   };
 }
 
@@ -51,7 +64,7 @@ export function summarizeDay(feeds: DayFeed[], diapers: DayDiaper[]): DaySummary
 export function sideMinutesPerDay(feeds: DayFeed[], timeZone: string): { left: number | null; right: number | null } {
   const byDay = new Map<string, { left: number; right: number }>();
   for (const feed of feeds) {
-    if (feed.ended_at === null) continue;
+    if (feed.kind === "bottle" || feed.ended_at === null || feed.side === null) continue;
     const day = todayLocalDate(timeZone, new Date(feed.started_at));
     const bucket = byDay.get(day) ?? { left: 0, right: 0 };
     addBreastMinutes(feed.side, activeMinutes(feed), bucket);

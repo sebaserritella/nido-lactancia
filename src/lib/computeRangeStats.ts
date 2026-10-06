@@ -8,6 +8,8 @@ type FeedPoint = {
   ended_at: string | null;
   paused_ms?: number | null;
   paused_at?: string | null;
+  kind?: "breast" | "bottle";
+  ml?: number | null;
 };
 
 type DiaperPoint = {
@@ -31,7 +33,7 @@ export function computeRangeStats(
   const rangedDiapers = diapers.filter(
     (diaper) => diaper.baby_id === babyId && inRange(diaper.occurred_at, from, to, timeZone),
   );
-  const completed = rangedFeeds.filter((feed) => feed.ended_at !== null);
+  const completed = rangedFeeds.filter((feed) => feed.kind !== "bottle" && feed.ended_at !== null);
   const minutes = completed.map((feed) => activeMinutes(feed));
   const gaps: number[] = [];
   for (let index = 1; index < rangedFeeds.length; index += 1) {
@@ -52,6 +54,19 @@ export function computeRangeStats(
     both_diapers_per_day: diaperRate(rangedDiapers, ["both"], timeZone),
     mean_gap_minutes: gaps.length === 0 ? null : average(gaps),
   };
+}
+
+/** Bottle count and milliliters, averaged over days that had a bottle. */
+export function bottleDaily(
+  feeds: { started_at: string; kind?: string; ml?: number | null }[],
+  timeZone: string,
+): { count: number | null; ml: number | null } {
+  const bottles = feeds.filter((feed) => feed.kind === "bottle");
+  const days = bottles.map((feed) => localDay(feed.started_at, timeZone));
+  const recordedDays = new Set(days).size;
+  if (recordedDays === 0) return { count: null, ml: null };
+  const ml = bottles.reduce((sum, feed) => sum + (feed.ml ?? 0), 0);
+  return { count: bottles.length / recordedDays, ml: ml / recordedDays };
 }
 
 /** Each diaper change counts once. Days with no diaper are left out of the rate. */

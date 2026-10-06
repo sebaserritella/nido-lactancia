@@ -4,12 +4,12 @@ import { LatestSummary } from "../components/LatestSummary";
 import { DiaperIcon, FeedIcon } from "../components/EventIcons";
 import type { Baby } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
-import type { Diaper, DiaperKind, Feed, FeedSide } from "../domain";
+import type { Diaper, DiaperKind, Feed, FeedKind, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
 import { activeElapsedMs, activeMinutes, closePause } from "../lib/feedDuration";
 import { summarizeDay } from "../lib/daySummary";
 import { formatElapsed, formatMinutes, formatStat } from "../lib/format";
-import { validateFeedInterval } from "../lib/feedRules";
+import { parseMilliliters, validateFeedInterval } from "../lib/feedRules";
 import { localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue, zonedTimeToUtc } from "../lib/localTime";
 import { WeightSection } from "./WeightSection";
 
@@ -20,7 +20,7 @@ type TodayPanelProps = {
   timeZone: string;
 };
 
-const feedColumns = "id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side";
+const feedColumns = "id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side, kind, ml";
 const diaperColumns = "id, household_id, baby_id, occurred_at, kind";
 
 export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) {
@@ -35,6 +35,11 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   const [tick, setTick] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [action, setAction] = useState<"feed" | "diaper">("feed");
+  const [method, setMethod] = useState<FeedKind>("breast");
+  const [mlText, setMlText] = useState("");
+  const [bottleReady, setBottleReady] = useState(false);
+  const [bottleBackfill, setBottleBackfill] = useState(false);
+  const [bottleWhen, setBottleWhen] = useState("");
 
   const open = feeds.find((feed) => feed.ended_at === null) ?? null;
 
@@ -146,6 +151,46 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     );
   }
 
+  async function showBottle() {
+    setMethod("bottle");
+    if (bottleReady) return;
+    setBottleReady(true);
+    const last = await client
+      .from("feeds")
+      .select("ml")
+      .eq("baby_id", baby.id)
+      .eq("kind", "bottle")
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const ml = (last.data as { ml: number } | null)?.ml;
+    if (typeof ml === "number") setMlText(String(ml));
+  }
+
+  async function saveBottle(when: Date, feedId?: string) {
+    const ml = parseMilliliters(mlText);
+    if (ml === null) {
+      setError(es.invalidMl);
+      return;
+    }
+    const iso = when.toISOString();
+    const payload = { started_at: iso, ended_at: iso, side: null, kind: "bottle" as const, ml, paused_ms: 0, paused_at: null };
+    const ok = feedId
+      ? await run(() => client.from("feeds").update(payload).eq("id", feedId))
+      : await run(() =>
+          client.from("feeds").insert({
+            ...payload,
+            household_id: baby.household_id,
+            baby_id: baby.id,
+            created_by: userId,
+          }),
+        );
+    if (!ok) return;
+    setBottleBackfill(false);
+    setBottleWhen("");
+    setEditing(null);
+  }
+
   async function saveFeed(startLocal: string, endLocal: string, nextSide: FeedSide, feedId?: string) {
     const start = zonedTimeToUtc(startLocal, timeZone);
     const end = endLocal === "" ? null : zonedTimeToUtc(endLocal, timeZone);
@@ -223,12 +268,45 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
       <section className="card stack">
         {action === "feed" ? (
           <>
-            {open ? (
+            <div className="choice">
+              <button type="button" className={method === "breast" ? "selected" : "ghost"} onClick={() => setMethod("breast")}>
+                {es.breast}
+              </button>
+              <button type="button" className={method === "bottle" ? "selected" : "ghost"} onClick={() => void showBottle()}>
+                {es.bottle}
+              </button>
+            </div>
+            {method === "bottle" ? (
+              <>
+                <label>
+                  {es.bottleMl}
+                  <input inputMode="numeric" value={mlText} onChange={(event) => setMlText(event.target.value)} />
+                </label>
+                <button type="button" className="with-icon" onClick={() => void saveBottle(new Date())}>
+                  <FeedIcon />
+                  {es.saveBottle}
+                </button>
+                <button type="button" className="ghost" onClick={() => setBottleBackfill((value) => !value)}>
+                  {es.backfill}
+                </button>
+                {bottleBackfill ? (
+                  <label>
+                    {es.started}
+                    <input type="datetime-local" value={bottleWhen} onChange={(event) => setBottleWhen(event.target.value)} />
+                  </label>
+                ) : null}
+                {bottleBackfill ? (
+                  <button type="button" onClick={() => bottleWhen !== "" && void saveBottle(zonedTimeToUtc(bottleWhen, timeZone))}>
+                    {es.saveBottle}
+                  </button>
+                ) : null}
+              </>
+            ) : open ? (
               <>
                 <p className="timer">{formatElapsed(activeElapsedMs(open, now))}</p>
                 <p className="muted">
                   {todayLocalDate(timeZone, new Date(open.started_at)) === today
-                    ? `${open.paused_at ? es.paused : es.inProgress} · ${sideLabel(open.side)}`
+                    ? `${open.paused_at ? es.paused : es.inProgress}${open.side ? ` · ${sideLabel(open.side)}` : ""}`
                     : open.paused_at
                       ? `${es.paused} · ${todayLocalDate(timeZone, new Date(open.started_at))} ${toDatetimeLocalValue(open.started_at, timeZone).slice(11)}`
                       : es.inProgressSince(
@@ -265,10 +343,12 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                 </button>
               </>
             )}
-            <button type="button" className="ghost" onClick={() => setBackfill((value) => !value)}>
-              {es.backfill}
-            </button>
-            {backfill ? (
+            {method === "breast" ? (
+              <button type="button" className="ghost" onClick={() => setBackfill((value) => !value)}>
+                {es.backfill}
+              </button>
+            ) : null}
+            {method === "breast" && backfill ? (
               <FeedForm
                 requireEnd
                 initialStart=""
@@ -319,25 +399,53 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                 <div className="entry-copy">
                   <strong>
                     {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
-                    {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ""}
+                    {feed.kind === "bottle" || !feed.ended_at ? "" : `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}`}
                   </strong>
                   <span>
-                    {sideLabel(feed.side)}
-                    {feed.ended_at
-                      ? ` · ${formatMinutes(activeMinutes(feed))}`
-                      : ` · ${feed.paused_at ? es.paused : es.inProgress}`}
+                    {feed.kind === "bottle"
+                      ? `${es.bottle} · ${feed.ml} ${es.ml}`
+                      : `${feed.side ? sideLabel(feed.side) : ""}${
+                          feed.ended_at
+                            ? ` · ${formatMinutes(activeMinutes(feed))}`
+                            : ` · ${feed.paused_at ? es.paused : es.inProgress}`
+                        }`}
                   </span>
                 </div>
               </div>
               <div className="row-actions">
-                <button type="button" className="ghost" onClick={() => setEditing(feed)}>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    if (feed.kind === "bottle") {
+                      setMlText(feed.ml == null ? "" : String(feed.ml));
+                      setBottleWhen(toDatetimeLocalValue(feed.started_at, timeZone));
+                    }
+                    setEditing(feed);
+                  }}
+                >
                   {es.editFeed}
                 </button>
                 <button type="button" className="ghost" onClick={() => removeFeed(feed.id)}>
                   {es.deleteFeed}
                 </button>
               </div>
-              {editing?.id === feed.id ? (
+              {editing?.id === feed.id && feed.kind === "bottle" ? (
+                <>
+                  <label>
+                    {es.started}
+                    <input type="datetime-local" value={bottleWhen} onChange={(event) => setBottleWhen(event.target.value)} />
+                  </label>
+                  <label>
+                    {es.bottleMl}
+                    <input inputMode="numeric" value={mlText} onChange={(event) => setMlText(event.target.value)} />
+                  </label>
+                  <button type="button" onClick={() => bottleWhen !== "" && void saveBottle(zonedTimeToUtc(bottleWhen, timeZone), feed.id)}>
+                    {es.saveBottle}
+                  </button>
+                </>
+              ) : null}
+              {editing?.id === feed.id && feed.kind !== "bottle" && feed.side ? (
                 <FeedForm
                   requireEnd={false}
                   initialStart={toDatetimeLocalValue(feed.started_at, timeZone)}
@@ -413,6 +521,14 @@ function DaySummary({ feeds, diapers }: { feeds: Feed[]; diapers: Diaper[] }) {
         <p className="stat-line">
           <span className="muted">{es.right}</span>
           <strong>{formatMinutes(summary.rightMinutes)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.bottlesCount}</span>
+          <strong>{formatStat(summary.bottleCount)}</strong>
+        </p>
+        <p className="stat-line">
+          <span className="muted">{es.bottleMl}</span>
+          <strong>{summary.bottleMl} {es.ml}</strong>
         </p>
         <p className="stat-line">
           <span className="muted">{es.meanGap}</span>

@@ -16,7 +16,9 @@ type TimelineFeed = {
   id: string;
   started_at: string;
   ended_at: string | null;
-  side: FeedSide;
+  side: FeedSide | null;
+  kind?: "breast" | "bottle";
+  ml?: number | null;
 };
 
 type TimelineDiaper = {
@@ -72,10 +74,17 @@ export function WeekTimeline({
 
 export function DayTimeline({ feeds, diapers, timeZone, window }: DayTimelineProps) {
   const feedBars = feeds.flatMap((feed) => {
+    if (feed.kind === "bottle" || feed.side === null) return [];
     const span = feedSpan(feed.started_at, feed.ended_at, timeZone);
     const sides: Array<"left" | "right"> = feed.side === "both" ? ["left", "right"] : [feed.side];
     return sides.map((side) => ({ id: `${feed.id}-${side}`, side, span, label: clockLabel(feed, timeZone) }));
   });
+  const bottles = feeds
+    .filter((feed) => feed.kind === "bottle")
+    .map((feed) => {
+      const minute = localMinutes(feed.started_at, timeZone);
+      return { id: feed.id, minute, label: `${formatMinuteOfDay(minute)} ${es.bottle} ${feed.ml ?? ""} ${es.ml}`.trim() };
+    });
   const marks = diapers.map((diaper) => {
     const minute = localMinutes(diaper.occurred_at, timeZone);
     return { id: diaper.id, minute, kind: diaper.kind, label: `${formatMinuteOfDay(minute)} ${diaperLabel(diaper.kind)}` };
@@ -98,6 +107,18 @@ export function DayTimeline({ feeds, diapers, timeZone, window }: DayTimelinePro
           .map((bar) => (
             <Bar key={bar.id} span={bar.span} window={axis} color="#2f6f62" label={bar.label} />
           ))}
+      </Lane>
+      <Lane name={es.bottle} hours={hours} window={axis}>
+        {bottles.map((mark) => (
+          <span
+            key={mark.id}
+            className="bottle-mark"
+            style={{ left: `${timelinePercent(axis, mark.minute)}%` }}
+            title={mark.label}
+            role="img"
+            aria-label={mark.label}
+          />
+        ))}
       </Lane>
       <Lane name={es.diapersHeading} hours={hours} window={axis}>
         {marks.map((mark) => (

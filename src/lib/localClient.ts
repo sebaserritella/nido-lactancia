@@ -59,7 +59,9 @@ type FeedRow = {
   ended_at: string | null;
   paused_ms: number;
   paused_at: string | null;
-  side: FeedSide;
+  side: FeedSide | null;
+  kind: "breast" | "bottle";
+  ml: number | null;
   created_by: string;
   created_at: string;
 };
@@ -103,7 +105,13 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       invites: parsed.invites ?? [],
       emailInvites: parsed.emailInvites ?? [],
       babies: (parsed.babies ?? []).map((baby) => ({ ...baby, born_on: baby.born_on ?? null })),
-      feeds: parsed.feeds ?? [],
+      feeds: (parsed.feeds ?? []).map((feed) => ({
+        ...feed,
+        kind: feed.kind ?? "breast",
+        ml: feed.ml ?? null,
+        paused_ms: feed.paused_ms ?? 0,
+        paused_at: feed.paused_at ?? null,
+      })),
       diapers: parsed.diapers ?? [],
       weights: parsed.weights ?? [],
       sessionUserId: parsed.sessionUserId ?? null,
@@ -436,6 +444,8 @@ class Query {
         created_by: db.sessionUserId,
         ...this.payload,
       };
+      if (this.table === "feeds" && row.kind === undefined) row.kind = "breast";
+      if (this.table === "feeds" && row.ml === undefined) row.ml = null;
       if (this.table === "feeds" && row.ended_at === undefined) row.ended_at = null;
       if (this.table === "feeds" && row.paused_ms === undefined) row.paused_ms = 0;
       if (this.table === "feeds" && row.paused_at === undefined) row.paused_at = null;
@@ -567,6 +577,15 @@ function constraintError(db: Database, table: string, row: Row, ignoreId: string
     return null;
   }
   if (table !== "feeds") return null;
+  if (row.kind === "bottle") {
+    const ml = row.ml;
+    const sameInstant = row.ended_at != null && new Date(String(row.ended_at)).getTime() === new Date(String(row.started_at)).getTime();
+    if (row.side != null || typeof ml !== "number" || !Number.isInteger(ml) || ml < 1 || !sameInstant || row.paused_at != null || row.paused_ms !== 0) {
+      return { code: "23514", message: "feeds_shape" };
+    }
+    return null;
+  }
+  if (row.side == null || row.ml != null) return { code: "23514", message: "feeds_shape" };
   if (row.ended_at != null && String(row.ended_at) <= String(row.started_at)) {
     return { code: "23514", message: "feeds_ended_after_start" };
   }

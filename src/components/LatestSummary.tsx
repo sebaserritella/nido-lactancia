@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DiaperKind, FeedSide } from "../domain";
+import type { DiaperKind, FeedKind, FeedSide } from "../domain";
 import { DiaperIcon, FeedIcon } from "./EventIcons";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
@@ -19,7 +19,9 @@ type LatestFeed = {
   ended_at: string | null;
   paused_ms: number;
   paused_at: string | null;
-  side: FeedSide;
+  side: FeedSide | null;
+  kind: FeedKind;
+  ml: number | null;
 };
 
 type LatestDiaper = {
@@ -28,7 +30,7 @@ type LatestDiaper = {
   kind: DiaperKind;
 };
 
-const feedColumns = "id, started_at, ended_at, paused_ms, paused_at, side";
+const feedColumns = "id, started_at, ended_at, paused_ms, paused_at, side, kind, ml";
 const diaperColumns = "id, occurred_at, kind";
 
 export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSummaryProps) {
@@ -96,19 +98,21 @@ export function LatestSummary({ client, babyId, timeZone, refreshKey }: LatestSu
           <FeedIcon />
           <h2>{es.latestFeed}</h2>
         </div>
-        {ready && feed ? <p>{sideLabel(feed.side)}</p> : null}
+        {ready && feed ? <p>{feed.kind === "bottle" ? es.bottle : feed.side ? sideLabel(feed.side) : ""}</p> : null}
         <p className="muted">
           {!ready
             ? es.loading
             : feed
-              ? formatLatestFeedLine(
-                  feed.started_at,
-                  feed.ended_at,
-                  timeZone,
-                  feed.paused_at ? es.paused : es.inProgress,
-                  new Date(),
-                  feed.paused_ms ?? 0,
-                )
+              ? feed.kind === "bottle"
+                ? `${formatLatestStamp(feed.started_at, timeZone)} · ${feed.ml} ${es.ml}`
+                : formatLatestFeedLine(
+                    feed.started_at,
+                    feed.ended_at,
+                    timeZone,
+                    feed.paused_at ? es.paused : es.inProgress,
+                    new Date(),
+                    feed.paused_ms ?? 0,
+                  )
               : es.noFeedsYet}
         </p>
       </article>

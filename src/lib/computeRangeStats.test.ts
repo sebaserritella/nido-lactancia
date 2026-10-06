@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRangeStats, diapersChangedPerDay } from "./computeRangeStats";
+import { bottleDaily, computeRangeStats, diapersChangedPerDay } from "./computeRangeStats";
 
 const babyId = "22222222-2222-2222-2222-222222222222";
 
@@ -88,6 +88,32 @@ describe("computeRangeStats", () => {
     expect(stats.poop_per_day).toBe(1);
     expect(stats.both_diapers_per_day).toBeNull();
     expect(stats.mean_gap_minutes).toBeNull();
+  });
+
+  it("counts a bottle as a feed and keeps its milliliters out of the minute average", () => {
+    const stats = computeRangeStats(
+      [
+        { baby_id: babyId, started_at: "2026-10-01T03:10:00Z", ended_at: "2026-10-01T03:28:00Z", kind: "breast" },
+        {
+          baby_id: babyId,
+          started_at: "2026-10-01T06:40:00Z",
+          ended_at: "2026-10-01T06:40:00Z",
+          kind: "bottle",
+          ml: 90,
+        },
+      ],
+      [],
+      babyId,
+      "2026-10-01",
+      "2026-10-01",
+      "America/Argentina/Buenos_Aires",
+    );
+    expect(stats.feed_count).toBe(2);
+    expect(stats.minutes_per_feed).toBeCloseTo(18);
+    expect(bottleDaily(
+      [{ started_at: "2026-10-01T06:40:00Z", kind: "bottle", ml: 90 }],
+      "America/Argentina/Buenos_Aires",
+    )).toEqual({ count: 1, ml: 90 });
   });
 
   it("returns no per-day rate when the range has no records", () => {

@@ -39,6 +39,17 @@ describe("local client", () => {
       side: "right",
     });
     expect(second.error?.code).toBe("23505");
+
+    const bottle = await client.from("feeds").insert({
+      household_id: created.data,
+      baby_id: babyId,
+      started_at: "2026-10-04T05:00:00.000Z",
+      ended_at: "2026-10-04T05:00:00.000Z",
+      side: null,
+      kind: "bottle",
+      ml: 90,
+    });
+    expect(bottle.error).toBeNull();
   });
 
   it("invites an existing user by email and joins a later signup", async () => {

@@ -19,6 +19,8 @@ describe("summarizeDay", () => {
       diaperChanges: 2,
       pee: 2,
       poop: 1,
+      bottleCount: 0,
+      bottleMl: 0,
     });
   });
 
@@ -33,6 +35,30 @@ describe("summarizeDay", () => {
     expect(summary.meanGapMinutes).toBeNull();
   });
 
+  it("counts a bottle in the gap and the ml total, and leaves breast minutes alone", () => {
+    const summary = summarizeDay(
+      [
+        { started_at: "2026-10-05T13:00:00Z", ended_at: "2026-10-05T13:18:00Z", paused_ms: 0, side: "left" as const, kind: "breast" as const },
+        {
+          started_at: "2026-10-05T16:40:00Z",
+          ended_at: "2026-10-05T16:40:00Z",
+          paused_ms: 0,
+          side: null,
+          kind: "bottle" as const,
+          ml: 90,
+        },
+      ],
+      [],
+    );
+    expect(summary.feedCount).toBe(2);
+    expect(summary.minutes).toBe(18);
+    expect(summary.leftMinutes).toBe(18);
+    expect(summary.rightMinutes).toBe(0);
+    expect(summary.bottleCount).toBe(1);
+    expect(summary.bottleMl).toBe(90);
+    expect(summary.meanGapMinutes).toBe(220);
+  });
+
   it("averages each breast over days that had a completed feed", () => {
     const perDay = sideMinutesPerDay(
       [
@@ -44,5 +70,17 @@ describe("summarizeDay", () => {
     );
     expect(perDay.left).toBeCloseTo(19);
     expect(perDay.right).toBeCloseTo(10);
+  });
+
+  it("does not let a bottle-only day pull the breast average down", () => {
+    const perDay = sideMinutesPerDay(
+      [
+        { started_at: "2026-10-01T13:00:00Z", ended_at: "2026-10-01T13:18:00Z", side: "left" },
+        { started_at: "2026-10-02T16:40:00Z", ended_at: "2026-10-02T16:40:00Z", side: null, kind: "bottle", ml: 90 },
+      ],
+      "America/Argentina/Buenos_Aires",
+    );
+    expect(perDay.left).toBeCloseTo(18);
+    expect(perDay.right).toBeCloseTo(0);
   });
 });

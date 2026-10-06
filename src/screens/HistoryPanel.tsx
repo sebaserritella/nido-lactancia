@@ -8,6 +8,7 @@ import { formatMinutes, formatStat } from "../lib/format";
 import { addCalendarDays, localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue } from "../lib/localTime";
 import { diapersChangedPerDay } from "../lib/computeRangeStats";
 import { sideMinutesPerDay } from "../lib/daySummary";
+import { bottleDaily } from "../lib/computeRangeStats";
 import { messageForError } from "../lib/errors";
 
 type HistoryPanelProps = {
@@ -35,7 +36,7 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
         client.rpc("range_stats", { p_baby_id: baby.id, p_from: from, p_to: today, p_tz: timeZone }),
         client
           .from("feeds")
-          .select("id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side")
+          .select("id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side, kind, ml")
           .eq("baby_id", baby.id)
           .gte("started_at", range.startInclusive.toISOString())
           .lt("started_at", range.endExclusive.toISOString())
@@ -86,6 +87,7 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
   }
 
   const sides = sideMinutesPerDay(feeds, timeZone);
+  const bottles = bottleDaily(feeds, timeZone);
   const selected = days.get(selectedDay) ?? { feeds: [], diapers: [] };
 
   function chooseDay(value: string) {
@@ -102,6 +104,8 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
           <Stat label={es.minutesPerFeed} value={formatMinutes(stats.minutes_per_feed)} />
           <Stat label={es.leftPerDay} value={formatMinutes(sides.left)} />
           <Stat label={es.rightPerDay} value={formatMinutes(sides.right)} />
+          <Stat label={es.bottlesPerDay} value={formatStat(bottles.count)} />
+          <Stat label={es.mlPerDay} value={bottles.ml === null ? null : `${formatStat(bottles.ml)} ${es.ml}`} />
           <Stat label={es.diapersPerDay} value={formatStat(diapersChangedPerDay(diapers, timeZone))} />
           <Stat label={es.peePerDay} value={formatStat(stats.pee_per_day)} />
           <Stat label={es.poopPerDay} value={formatStat(stats.poop_per_day)} />
@@ -143,9 +147,13 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
                     <div className="entry-copy">
                       <strong>
                         {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
-                        {feed.ended_at ? `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}` : ` · ${feed.paused_at ? es.paused : es.inProgress}`}
+                        {feed.kind === "bottle" || !feed.ended_at
+                          ? feed.kind === "bottle"
+                            ? ""
+                            : ` · ${feed.paused_at ? es.paused : es.inProgress}`
+                          : `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}`}
                       </strong>
-                      <span>{sideLabel(feed.side)}</span>
+                      <span>{feed.kind === "bottle" ? `${es.bottle} · ${feed.ml} ${es.ml}` : feed.side ? sideLabel(feed.side) : ""}</span>
                     </div>
                   </div>
                 </li>
