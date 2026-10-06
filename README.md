@@ -1,5 +1,7 @@
 # Nido lactancia
 
+[![versión](https://img.shields.io/github/package-json/v/sebaserritella/nido-lactancia?label=versión)](CHANGELOG.md)
+[![changelog](https://img.shields.io/badge/changelog-notas-6e625a)](CHANGELOG.md)
 [![Deploy](https://github.com/sebaserritella/nido-lactancia/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/sebaserritella/nido-lactancia/actions/workflows/deploy-pages.yml)
 [![Sitio](https://img.shields.io/website?url=https%3A%2F%2Fsebaserritella.github.io%2Fnido-lactancia%2F&label=sitio&up_message=activa&down_message=ca%C3%ADda)](https://sebaserritella.github.io/nido-lactancia/)
 
@@ -55,6 +57,6 @@ Un usuario distinto es un navegador, por la cookie de Google. El mismo correo en
 
 ## Publicar en GitHub Pages
 
-Settings → Pages → Source: GitHub Actions. El workflow `.github/workflows/deploy-pages.yml` corre los tests y publica `main`. El build lee `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_FIREBASE_MEASUREMENT_ID`. Con las dos de Supabase, la página publicada guarda en Supabase. Sin ellas, guarda solo en el navegador.
+La versión publicada es la de `package.json`. El detalle está en [CHANGELOG.md](CHANGELOG.md). Settings → Pages → Source: GitHub Actions. El workflow `.github/workflows/deploy-pages.yml` corre los tests y publica `main`. El build lee `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` y `VITE_FIREBASE_MEASUREMENT_ID`. Con las dos de Supabase, la página publicada guarda en Supabase. Sin ellas, guarda solo en el navegador.
 
 El proyecto gratis de Supabase se pausa si nadie entra durante 7 días. Hay que restaurarlo desde el dashboard.
