@@ -1,5 +1,3 @@
-const consentKey = "nido-lactancia.analytics-consent";
-
 const screens = [
   "login",
   "register",
@@ -76,39 +74,7 @@ const schema: Record<string, { required: string[]; fields: Record<string, readon
   save_failed: { required: ["action", "reason"], fields: { action: actions, reason: ["invalid_input", "conflict", "unavailable"] } },
 };
 
-export type AnalyticsConsent = "unknown" | "granted" | "denied";
-
 type CleanEvent = { name: string; params: Record<string, string> };
-
-const listeners = new Set<() => void>();
-const pending: CleanEvent[] = [];
-
-export function analyticsConfigured(): boolean {
-  return /^G-[A-Z0-9]+$/.test(measurementId());
-}
-
-export function readConsent(): AnalyticsConsent {
-  if (typeof localStorage === "undefined") return "unknown";
-  const value = localStorage.getItem(consentKey);
-  return value === "granted" || value === "denied" ? value : "unknown";
-}
-
-export function subscribeConsent(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
-
-export function grantAnalytics(): void {
-  localStorage.setItem(consentKey, "granted");
-  notify();
-  for (const event of pending.splice(0)) void send(event);
-}
-
-export function denyAnalytics(): void {
-  localStorage.setItem(consentKey, "denied");
-  pending.splice(0);
-  notify();
-}
 
 export function buildAnalyticsEvent(name: string, props?: Record<string, unknown>): CleanEvent | null {
   const rule = schema[name];
@@ -136,16 +102,9 @@ export function failureReason(error?: { code?: string; message?: string } | null
 }
 
 export function track(name: string, props?: Record<string, unknown>): void {
-  if (!analyticsConfigured()) return;
+  if (!/^G-[A-Z0-9]+$/.test(measurementId())) return;
   const event = buildAnalyticsEvent(name, props);
   if (!event) return;
-  const consent = readConsent();
-  if (consent === "denied") return;
-  if (consent === "unknown") {
-    pending.push(event);
-    if (pending.length > 20) pending.shift();
-    return;
-  }
   void send(event);
 }
 
@@ -178,10 +137,6 @@ export function trackRejected(name: string): void {
 
 function measurementId(): string {
   return import.meta.env.VITE_FIREBASE_MEASUREMENT_ID?.trim() ?? "";
-}
-
-function notify(): void {
-  for (const listener of listeners) listener();
 }
 
 type Gtag = (...args: unknown[]) => void;
