@@ -1,7 +1,10 @@
 import { activeMinutes, type FeedClock } from "./feedDuration";
+import { intakeStarts } from "./feedSessions";
 import { todayLocalDate } from "./localTime";
 
 type DayFeed = FeedClock & {
+  id?: string;
+  session_id?: string | null;
   side: "left" | "right" | "both" | null;
   kind?: "breast" | "bottle";
   ml?: number | null;
@@ -41,13 +44,13 @@ export function summarizeDay(feeds: DayFeed[], diapers: DayDiaper[]): DaySummary
     minutes += elapsed;
     addBreastMinutes(feed.side, elapsed, breasts);
   }
-  const starts = feeds.map((feed) => new Date(feed.started_at).getTime()).sort((left, right) => left - right);
+  const starts = intakeStarts(feeds);
   let gapTotal = 0;
   for (let index = 1; index < starts.length; index += 1) {
     gapTotal += (starts[index] - starts[index - 1]) / 60_000;
   }
   return {
-    feedCount: feeds.length,
+    feedCount: starts.length,
     minutes,
     leftMinutes: breasts.left,
     rightMinutes: breasts.right,

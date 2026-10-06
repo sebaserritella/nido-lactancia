@@ -10,8 +10,16 @@ describe("latest stamp", () => {
     expect(formatLatestStamp("2026-10-04T15:32:00.000Z", BUENOS_AIRES, now)).toBe("12:32");
   });
 
-  it("includes the local date when the event is another day", () => {
-    expect(formatLatestStamp("2026-10-04T02:30:00.000Z", BUENOS_AIRES, now)).toBe("2026-10-03 23:30");
+  it("says ayer when the event was yesterday in the device zone", () => {
+    expect(formatLatestStamp("2026-10-04T02:30:00.000Z", BUENOS_AIRES, now)).toBe("ayer 23:30");
+  });
+
+  it("says anteayer for the day before yesterday", () => {
+    expect(formatLatestStamp("2026-10-02T15:00:00.000Z", BUENOS_AIRES, now)).toBe("anteayer 12:00");
+  });
+
+  it("keeps the numeric date when the event is older than anteayer", () => {
+    expect(formatLatestStamp("2026-10-01T15:00:00.000Z", BUENOS_AIRES, now)).toBe("2026-10-01 12:00");
   });
 
   it("shows the end clock and elapsed minutes after a feed ends", () => {
@@ -22,7 +30,7 @@ describe("latest stamp", () => {
 
   it("keeps the end as a clock when the feed crosses midnight", () => {
     expect(formatLatestFeedLine("2026-10-04T02:30:00.000Z", "2026-10-04T03:10:00.000Z", BUENOS_AIRES, "En curso", now)).toBe(
-      "2026-10-03 23:30–00:10 · 40 min",
+      "ayer 23:30–00:10 · 40 min",
     );
   });
 

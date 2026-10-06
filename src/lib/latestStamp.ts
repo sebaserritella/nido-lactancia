@@ -1,13 +1,17 @@
 import { activeMinutes } from "./feedDuration";
 import { formatMinutes } from "./format";
-import { todayLocalDate, toDatetimeLocalValue } from "./localTime";
+import { es } from "../i18n/es";
+import { addCalendarDays, todayLocalDate, toDatetimeLocalValue } from "./localTime";
 
-/** Local date and time. The date is omitted when the instant is today in `timeZone`. */
+/** Local date and time. Today is only the clock. Yesterday and the day before use a relative word. */
 export function formatLatestStamp(isoUtc: string, timeZone: string, now = new Date()): string {
   const local = toDatetimeLocalValue(isoUtc, timeZone);
   const date = local.slice(0, 10);
   const time = local.slice(11);
-  if (date === todayLocalDate(timeZone, now)) return time;
+  const today = todayLocalDate(timeZone, now);
+  if (date === today) return time;
+  if (date === addCalendarDays(today, -1)) return `${es.yesterday} ${time}`;
+  if (date === addCalendarDays(today, -2)) return `${es.dayBeforeYesterday} ${time}`;
   return `${date} ${time}`;
 }
 

@@ -194,8 +194,36 @@ details summary { min-height: 44px; display: flex; align-items: center; cursor: 
   min-width: 0;
 }
 
+.entries li div.group-head,
 .entries li div.entry-line {
   display: flex;
+}
+
+.feed-group {
+  border: 1px solid #ddcfc0;
+}
+
+.feed-group .nested {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feed-group .nested li {
+  background: transparent;
+  padding: 8px 0 0;
+}
+
+input.feed-check {
+  width: 22px;
+  min-height: 22px;
+  margin: 0;
+  padding: 0;
+  accent-color: #241c18;
+}
+
+.entries li.suggest {
+  background: #f3e2c4;
 }
 
 .entry-copy {

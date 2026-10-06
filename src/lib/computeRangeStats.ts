@@ -1,8 +1,11 @@
 import type { DiaperKind, RangeStats } from "../domain";
 import { activeMinutes } from "./feedDuration";
+import { intakeStarts, sessionKey } from "./feedSessions";
 import { todayLocalDate } from "./localTime";
 
 type FeedPoint = {
+  id?: string;
+  session_id?: string | null;
   baby_id: string;
   started_at: string;
   ended_at: string | null;
@@ -33,21 +36,23 @@ export function computeRangeStats(
   const rangedDiapers = diapers.filter(
     (diaper) => diaper.baby_id === babyId && inRange(diaper.occurred_at, from, to, timeZone),
   );
-  const completed = rangedFeeds.filter((feed) => feed.kind !== "bottle" && feed.ended_at !== null);
-  const minutes = completed.map((feed) => activeMinutes(feed));
+  const sessionMinutes = new Map<string, number>();
+  rangedFeeds.forEach((feed, index) => {
+    if (feed.kind === "bottle" || feed.ended_at === null) return;
+    const key = sessionKey(feed, index);
+    sessionMinutes.set(key, (sessionMinutes.get(key) ?? 0) + activeMinutes(feed));
+  });
+  const minutes = [...sessionMinutes.values()];
+  const starts = intakeStarts(rangedFeeds);
+  const sessionDays = sessionStartDays(rangedFeeds, timeZone);
   const gaps: number[] = [];
-  for (let index = 1; index < rangedFeeds.length; index += 1) {
-    gaps.push(
-      (new Date(rangedFeeds[index].started_at).getTime() - new Date(rangedFeeds[index - 1].started_at).getTime()) / 60000,
-    );
+  for (let index = 1; index < starts.length; index += 1) {
+    gaps.push((starts[index] - starts[index - 1]) / 60000);
   }
   return {
     day_count: dayCount,
-    feed_count: rangedFeeds.length,
-    feeds_per_day: perRecordedDay(
-      rangedFeeds.length,
-      rangedFeeds.map((feed) => localDay(feed.started_at, timeZone)),
-    ),
+    feed_count: starts.length,
+    feeds_per_day: perRecordedDay(starts.length, sessionDays),
     minutes_per_feed: minutes.length === 0 ? null : average(minutes),
     pee_per_day: diaperRate(rangedDiapers, ["pee", "both"], timeZone),
     poop_per_day: diaperRate(rangedDiapers, ["poop", "both"], timeZone),
@@ -75,6 +80,19 @@ export function diapersChangedPerDay(diapers: { occurred_at: string }[], timeZon
     diapers.length,
     diapers.map((diaper) => localDay(diaper.occurred_at, timeZone)),
   );
+}
+
+function sessionStartDays(feeds: FeedPoint[], timeZone: string): string[] {
+  const bySession = new Map<string, { start: number; day: string }>();
+  feeds.forEach((feed, index) => {
+    const key = sessionKey(feed, index);
+    const start = new Date(feed.started_at).getTime();
+    const current = bySession.get(key);
+    if (current === undefined || start < current.start) {
+      bySession.set(key, { start, day: localDay(feed.started_at, timeZone) });
+    }
+  });
+  return [...bySession.values()].map((session) => session.day);
 }
 
 function diaperRate(diapers: DiaperPoint[], kinds: DiaperKind[], timeZone: string): number | null {

@@ -62,6 +62,7 @@ type FeedRow = {
   side: FeedSide | null;
   kind: "breast" | "bottle";
   ml: number | null;
+  session_id: string | null;
   created_by: string;
   created_at: string;
 };
@@ -76,6 +77,14 @@ type DiaperRow = {
   created_at: string;
 };
 
+type FeedPairDismissalRow = {
+  id: string;
+  earlier_feed_id: string;
+  later_feed_id: string;
+  household_id: string;
+  created_at: string;
+};
+
 type Database = {
   users: UserRow[];
   members: MemberRow[];
@@ -85,6 +94,7 @@ type Database = {
   feeds: FeedRow[];
   diapers: DiaperRow[];
   weights: WeightRow[];
+  feedPairDismissals: FeedPairDismissalRow[];
   sessionUserId: string | null;
 };
 
@@ -111,9 +121,11 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
         ml: feed.ml ?? null,
         paused_ms: feed.paused_ms ?? 0,
         paused_at: feed.paused_at ?? null,
+        session_id: feed.session_id ?? null,
       })),
       diapers: parsed.diapers ?? [],
       weights: parsed.weights ?? [],
+      feedPairDismissals: parsed.feedPairDismissals ?? [],
       sessionUserId: parsed.sessionUserId ?? null,
     };
   }
@@ -449,6 +461,7 @@ class Query {
       if (this.table === "feeds" && row.ended_at === undefined) row.ended_at = null;
       if (this.table === "feeds" && row.paused_ms === undefined) row.paused_ms = 0;
       if (this.table === "feeds" && row.paused_at === undefined) row.paused_at = null;
+      if (this.table === "feeds" && row.session_id === undefined) row.session_id = null;
       if (this.table === "babies" && row.born_on === undefined) row.born_on = null;
       const constraint = constraintError(db, this.table, row, null);
       if (constraint) return { data: null, error: constraint };
@@ -470,9 +483,18 @@ class Query {
     if (this.operation === "delete") {
       const ids = new Set(matched.map((row) => row.id));
       if (this.table === "babies") {
+        const removedFeeds = new Set(db.feeds.filter((feed) => ids.has(feed.baby_id)).map((feed) => feed.id));
+        db.feedPairDismissals = db.feedPairDismissals.filter(
+          (pair) => !removedFeeds.has(pair.earlier_feed_id) && !removedFeeds.has(pair.later_feed_id),
+        );
         db.feeds = db.feeds.filter((feed) => !ids.has(feed.baby_id));
         db.diapers = db.diapers.filter((diaper) => !ids.has(diaper.baby_id));
         db.weights = db.weights.filter((weight) => !ids.has(weight.baby_id));
+      }
+      if (this.table === "feeds") {
+        db.feedPairDismissals = db.feedPairDismissals.filter(
+          (pair) => !ids.has(pair.earlier_feed_id) && !ids.has(pair.later_feed_id),
+        );
       }
       replaceRows(db, this.table, rows.filter((row) => !ids.has(row.id)));
       this.save(db);
@@ -523,6 +545,7 @@ function emptyDatabase(): Database {
     feeds: [],
     diapers: [],
     weights: [],
+    feedPairDismissals: [],
     sessionUserId: null,
   };
 }
@@ -535,6 +558,7 @@ function rowsOf(db: Database, table: string): Row[] {
   if (table === "feeds") return db.feeds as unknown as Row[];
   if (table === "diapers") return db.diapers as unknown as Row[];
   if (table === "weights") return db.weights as unknown as Row[];
+  if (table === "feed_pair_dismissals") return db.feedPairDismissals as unknown as Row[];
   return [];
 }
 
@@ -543,6 +567,7 @@ function replaceRows(db: Database, table: string, rows: Row[]) {
   if (table === "feeds") db.feeds = rows as unknown as FeedRow[];
   if (table === "diapers") db.diapers = rows as unknown as DiaperRow[];
   if (table === "weights") db.weights = rows as unknown as WeightRow[];
+  if (table === "feed_pair_dismissals") db.feedPairDismissals = rows as unknown as FeedPairDismissalRow[];
   if (table === "invites") db.invites = rows as unknown as InviteRow[];
   if (table === "email_invites") db.emailInvites = rows as unknown as EmailInviteRow[];
   if (table === "household_members") db.members = rows as unknown as MemberRow[];
@@ -576,16 +601,38 @@ function constraintError(db: Database, table: string, row: Row, ignoreId: string
     if (duplicate) return { code: "23505", message: "weights_baby_day" };
     return null;
   }
+  if (table === "feed_pair_dismissals") {
+    const duplicate = db.feedPairDismissals.find(
+      (pair) => pair.earlier_feed_id === row.earlier_feed_id && pair.later_feed_id === row.later_feed_id && pair.id !== ignoreId,
+    );
+    if (duplicate || row.earlier_feed_id === row.later_feed_id) return { code: "23505", message: "feed_pair_dismissals_pkey" };
+    return null;
+  }
   if (table !== "feeds") return null;
   if (row.kind === "bottle") {
     const ml = row.ml;
     const sameInstant = row.ended_at != null && new Date(String(row.ended_at)).getTime() === new Date(String(row.started_at)).getTime();
-    if (row.side != null || typeof ml !== "number" || !Number.isInteger(ml) || ml < 1 || !sameInstant || row.paused_at != null || row.paused_ms !== 0) {
+    if (
+      row.side != null ||
+      row.session_id != null ||
+      typeof ml !== "number" ||
+      !Number.isInteger(ml) ||
+      ml < 1 ||
+      !sameInstant ||
+      row.paused_at != null ||
+      row.paused_ms !== 0
+    ) {
       return { code: "23514", message: "feeds_shape" };
     }
     return null;
   }
   if (row.side == null || row.ml != null) return { code: "23514", message: "feeds_shape" };
+  if (row.session_id != null) {
+    const otherBaby = db.feeds.find(
+      (feed) => feed.session_id === row.session_id && feed.baby_id !== row.baby_id && feed.id !== ignoreId,
+    );
+    if (otherBaby) return { code: "23514", message: "feeds_session_same_baby" };
+  }
   if (row.ended_at != null && String(row.ended_at) <= String(row.started_at)) {
     return { code: "23514", message: "feeds_ended_after_start" };
   }

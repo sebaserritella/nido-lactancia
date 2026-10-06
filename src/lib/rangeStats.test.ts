@@ -24,7 +24,7 @@ describe("range_stats_for_household", () => {
       create or replace function auth.uid() returns uuid
       language sql stable as $$ select null::uuid $$;
     `);
-    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql", "0008_feed_pause.sql", "0009_both_counts_twice.sql", "0010_bottle_feeds.sql"]) {
+    for (const file of ["0001_schema.sql", "0002_rls.sql", "0003_rpc.sql", "0006_stats_skip_empty_days.sql", "0008_feed_pause.sql", "0009_both_counts_twice.sql", "0010_bottle_feeds.sql", "0011_feed_sessions.sql"]) {
       await db.exec(readFileSync(join(root, file), "utf8"));
     }
     await db.exec(`
@@ -83,6 +83,28 @@ describe("range_stats_for_household", () => {
     );
     expect(result.rows[0].stats.feed_count).toBe(2);
     expect(result.rows[0].stats.minutes_per_feed).toBeCloseTo(20);
+  });
+
+  it("counts two grouped breast feeds as one feed and drops the gap between them", async () => {
+    const groupedBabyId = "66666666-6666-6666-6666-666666666666";
+    const sessionId = "77777777-7777-7777-7777-777777777777";
+    await db.exec(`
+      insert into babies (id, household_id, name)
+      values ('${groupedBabyId}', '${householdId}', 'Iris');
+      insert into feeds (household_id, baby_id, started_at, ended_at, side, session_id, created_by)
+      values
+        ('${householdId}', '${groupedBabyId}', '2026-10-06T13:00:00Z', '2026-10-06T13:08:00Z', 'left', '${sessionId}', '${userId}'),
+        ('${householdId}', '${groupedBabyId}', '2026-10-06T13:12:00Z', '2026-10-06T13:22:00Z', 'right', '${sessionId}', '${userId}'),
+        ('${householdId}', '${groupedBabyId}', '2026-10-06T19:40:00Z', '2026-10-06T19:55:00Z', 'left', null, '${userId}');
+    `);
+    const result = await db.query<{ stats: Stats }>(
+      `select range_stats_for_household($1, $2, '2026-10-06', '2026-10-06', 'America/Argentina/Buenos_Aires') as stats`,
+      [householdId, groupedBabyId],
+    );
+    expect(result.rows[0].stats.feed_count).toBe(2);
+    expect(result.rows[0].stats.feeds_per_day).toBe(2);
+    expect(result.rows[0].stats.minutes_per_feed).toBeCloseTo(16.5);
+    expect(result.rows[0].stats.mean_gap_minutes).toBe(400);
   });
 
   it("leaves paused minutes out of the average", async () => {

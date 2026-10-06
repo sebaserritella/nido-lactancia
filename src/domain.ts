@@ -28,6 +28,7 @@ export type Feed = {
   side: FeedSide | null;
   kind: FeedKind;
   ml: number | null;
+  session_id: string | null;
 };
 
 export type Diaper = {

@@ -59,6 +59,43 @@ describe("summarizeDay", () => {
     expect(summary.meanGapMinutes).toBe(220);
   });
 
+  it("counts a grouped pair as one feed and drops the gap inside the group", () => {
+    const summary = summarizeDay(
+      [
+        {
+          id: "left",
+          session_id: "session-1",
+          started_at: "2026-10-06T13:00:00.000Z",
+          ended_at: "2026-10-06T13:08:00.000Z",
+          paused_ms: 0,
+          side: "left",
+        },
+        {
+          id: "right",
+          session_id: "session-1",
+          started_at: "2026-10-06T13:12:00.000Z",
+          ended_at: "2026-10-06T13:22:00.000Z",
+          paused_ms: 0,
+          side: "right",
+        },
+        {
+          id: "afternoon",
+          session_id: null,
+          started_at: "2026-10-06T19:40:00.000Z",
+          ended_at: "2026-10-06T19:55:00.000Z",
+          paused_ms: 0,
+          side: "left",
+        },
+      ],
+      [],
+    );
+    expect(summary.feedCount).toBe(2);
+    expect(summary.minutes).toBe(33);
+    expect(summary.leftMinutes).toBe(23);
+    expect(summary.rightMinutes).toBe(10);
+    expect(summary.meanGapMinutes).toBe(400);
+  });
+
   it("averages each breast over days that had a completed feed", () => {
     const perDay = sideMinutesPerDay(
       [

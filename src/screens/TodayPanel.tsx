@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LatestSummary } from "../components/LatestSummary";
+import { FeedLog } from "../components/FeedLog";
 import { DiaperIcon, FeedIcon } from "../components/EventIcons";
 import type { Baby } from "../domain";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedKind, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
-import { activeElapsedMs, activeMinutes, closePause } from "../lib/feedDuration";
+import { activeElapsedMs, closePause } from "../lib/feedDuration";
 import { summarizeDay } from "../lib/daySummary";
 import { formatElapsed, formatMinutes, formatStat } from "../lib/format";
+import { assignSessionId, type DismissedPair } from "../lib/feedSessions";
 import { parseMilliliters, validateFeedInterval } from "../lib/feedRules";
 import { localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue, zonedTimeToUtc } from "../lib/localTime";
 import { WeightSection } from "./WeightSection";
@@ -20,12 +22,14 @@ type TodayPanelProps = {
   timeZone: string;
 };
 
-const feedColumns = "id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side, kind, ml";
+const feedColumns = "id, household_id, baby_id, started_at, ended_at, paused_ms, paused_at, side, kind, ml, session_id";
 const diaperColumns = "id, household_id, baby_id, occurred_at, kind";
 
 export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [diapers, setDiapers] = useState<Diaper[]>([]);
+  const [dismissed, setDismissed] = useState<DismissedPair[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [side, setSide] = useState<FeedSide>("left");
   const [error, setError] = useState<string | null>(null);
   const [backfill, setBackfill] = useState(false);
@@ -54,7 +58,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     async function load() {
       const today = todayLocalDate(timeZone);
       const range = localDateRangeToUtc(today, today, timeZone);
-      const [dayFeeds, dayDiapers, openFeed] = await Promise.all([
+      const [dayFeeds, dayDiapers, openFeed, pairRows] = await Promise.all([
         client
           .from("feeds")
           .select(feedColumns)
@@ -70,9 +74,10 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
           .lt("occurred_at", range.endExclusive.toISOString())
           .order("occurred_at", { ascending: false }),
         client.from("feeds").select(feedColumns).eq("baby_id", baby.id).is("ended_at", null).maybeSingle(),
+        client.from("feed_pair_dismissals").select("earlier_feed_id, later_feed_id").eq("household_id", baby.household_id),
       ]);
       if (ignore) return;
-      const failure = dayFeeds.error ?? dayDiapers.error ?? openFeed.error;
+      const failure = dayFeeds.error ?? dayDiapers.error ?? openFeed.error ?? pairRows.error;
       if (failure) {
         setError(messageForError(failure));
         return;
@@ -84,6 +89,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
       }
       setFeeds(merged);
       setDiapers((dayDiapers.data ?? []) as Diaper[]);
+      setDismissed((pairRows.data ?? []) as DismissedPair[]);
     }
     void load();
     const channel = client
@@ -245,6 +251,50 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     await run(() => client.from("diapers").delete().eq("id", id));
   }
 
+  function toggleSelected(ids: string[]) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      const allOn = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (allOn) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function groupFeeds(chosen: Feed[]) {
+    const sessionId = assignSessionId(chosen, () => crypto.randomUUID());
+    if (!sessionId) return;
+    setError(null);
+    for (const feed of chosen) {
+      if (feed.session_id === sessionId) continue;
+      const { error: writeError } = await client.from("feeds").update({ session_id: sessionId }).eq("id", feed.id);
+      if (writeError) {
+        setError(messageForError(writeError));
+        setTick((value) => value + 1);
+        return;
+      }
+    }
+    setSelectedIds(new Set());
+    setTick((value) => value + 1);
+  }
+
+  async function ungroup(sessionId: string) {
+    const ok = await run(() => client.from("feeds").update({ session_id: null }).eq("session_id", sessionId).eq("baby_id", baby.id));
+    if (ok) setSelectedIds(new Set());
+  }
+
+  async function dismissPair(earlierId: string, laterId: string) {
+    await run(() =>
+      client.from("feed_pair_dismissals").insert({
+        household_id: baby.household_id,
+        earlier_feed_id: earlierId,
+        later_feed_id: laterId,
+      }),
+    );
+  }
+
   const today = todayLocalDate(timeZone);
 
   return (
@@ -391,27 +441,17 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
           {es.feedsHeading}
         </h2>
         {feeds.length === 0 ? <p className="muted">{es.noFeedsYet}</p> : null}
-        <ul className="entries">
-          {feeds.map((feed) => (
-            <li key={feed.id}>
-              <div className="entry-line">
-                <FeedIcon />
-                <div className="entry-copy">
-                  <strong>
-                    {toDatetimeLocalValue(feed.started_at, timeZone).slice(11)}
-                    {feed.kind === "bottle" || !feed.ended_at ? "" : `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}`}
-                  </strong>
-                  <span>
-                    {feed.kind === "bottle"
-                      ? `${es.bottle} · ${feed.ml} ${es.ml}`
-                      : `${feed.side ? sideLabel(feed.side) : ""}${
-                          feed.ended_at
-                            ? ` · ${formatMinutes(activeMinutes(feed))}`
-                            : ` · ${feed.paused_at ? es.paused : es.inProgress}`
-                        }`}
-                  </span>
-                </div>
-              </div>
+        <FeedLog
+          feeds={feeds}
+          dismissed={dismissed}
+          timeZone={timeZone}
+          selectedIds={selectedIds}
+          onToggle={toggleSelected}
+          onGroup={(chosen) => void groupFeeds(chosen)}
+          onUngroup={(sessionId) => void ungroup(sessionId)}
+          onDismiss={(earlierId, laterId) => void dismissPair(earlierId, laterId)}
+          renderExtra={(feed) => (
+            <>
               <div className="row-actions">
                 <button
                   type="button"
@@ -455,9 +495,9 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                   onSave={(startLocal, endLocal, nextSide) => saveFeed(startLocal, endLocal, nextSide, feed.id)}
                 />
               ) : null}
-            </li>
-          ))}
-        </ul>
+            </>
+          )}
+        />
       </section>
       <section className="stack">
         <h2 className="section-title">

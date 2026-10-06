@@ -169,4 +169,67 @@ describe("local client", () => {
     expect(weights.error).toBeNull();
     expect(weights.data).toEqual([]);
   });
+
+  it("stores a shared session on breast feeds and refuses it on a bottle", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client.from("babies").insert({ household_id: household.data, name: "Lola" }).select("id").single();
+    const babyId = (baby.data as { id: string }).id;
+    const left = await client
+      .from("feeds")
+      .insert({
+        household_id: household.data,
+        baby_id: babyId,
+        started_at: "2026-10-06T13:00:00.000Z",
+        ended_at: "2026-10-06T13:08:00.000Z",
+        side: "left",
+      })
+      .select("id")
+      .single();
+    const right = await client
+      .from("feeds")
+      .insert({
+        household_id: household.data,
+        baby_id: babyId,
+        started_at: "2026-10-06T13:12:00.000Z",
+        ended_at: "2026-10-06T13:22:00.000Z",
+        side: "right",
+      })
+      .select("id")
+      .single();
+    const sessionId = "77777777-7777-7777-7777-777777777777";
+    const grouped = await client.from("feeds").update({ session_id: sessionId }).eq("id", (left.data as { id: string }).id);
+    expect(grouped.error).toBeNull();
+    await client.from("feeds").update({ session_id: sessionId }).eq("id", (right.data as { id: string }).id);
+    const rows = await client.from("feeds").select("id, session_id").eq("baby_id", babyId);
+    expect(rows.data).toEqual([
+      { id: (left.data as { id: string }).id, session_id: sessionId },
+      { id: (right.data as { id: string }).id, session_id: sessionId },
+    ]);
+
+    const bottle = await client
+      .from("feeds")
+      .insert({
+        household_id: household.data,
+        baby_id: babyId,
+        started_at: "2026-10-06T23:05:00.000Z",
+        ended_at: "2026-10-06T23:05:00.000Z",
+        side: null,
+        kind: "bottle",
+        ml: 90,
+        session_id: sessionId,
+      });
+    expect(bottle.error?.code).toBe("23514");
+
+    const dismissed = await client.from("feed_pair_dismissals").insert({
+      household_id: household.data,
+      earlier_feed_id: (left.data as { id: string }).id,
+      later_feed_id: (right.data as { id: string }).id,
+    });
+    expect(dismissed.error).toBeNull();
+    await client.from("feeds").delete().eq("id", (left.data as { id: string }).id);
+    const pairs = await client.from("feed_pair_dismissals").select("earlier_feed_id").eq("household_id", household.data);
+    expect(pairs.data).toEqual([]);
+  });
 });

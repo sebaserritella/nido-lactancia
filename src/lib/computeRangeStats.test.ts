@@ -116,6 +116,45 @@ describe("computeRangeStats", () => {
     )).toEqual({ count: 1, ml: 90 });
   });
 
+  it("counts a grouped pair as one feed and averages the sum of its minutes", () => {
+    const stats = computeRangeStats(
+      [
+        {
+          id: "left",
+          session_id: "session-1",
+          baby_id: babyId,
+          started_at: "2026-10-06T13:00:00.000Z",
+          ended_at: "2026-10-06T13:08:00.000Z",
+          kind: "breast",
+        },
+        {
+          id: "right",
+          session_id: "session-1",
+          baby_id: babyId,
+          started_at: "2026-10-06T13:12:00.000Z",
+          ended_at: "2026-10-06T13:22:00.000Z",
+          kind: "breast",
+        },
+        {
+          id: "afternoon",
+          baby_id: babyId,
+          started_at: "2026-10-06T19:40:00.000Z",
+          ended_at: "2026-10-06T19:55:00.000Z",
+          kind: "breast",
+        },
+      ],
+      [],
+      babyId,
+      "2026-10-06",
+      "2026-10-06",
+      "America/Argentina/Buenos_Aires",
+    );
+    expect(stats.feed_count).toBe(2);
+    expect(stats.feeds_per_day).toBe(2);
+    expect(stats.minutes_per_feed).toBeCloseTo(16.5);
+    expect(stats.mean_gap_minutes).toBe(400);
+  });
+
   it("returns no per-day rate when the range has no records", () => {
     const stats = computeRangeStats([], [], babyId, "2026-10-01", "2026-10-03", "America/Argentina/Buenos_Aires");
     expect(stats.day_count).toBe(3);
