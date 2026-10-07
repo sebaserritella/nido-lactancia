@@ -7,6 +7,7 @@ import { markLocalMode } from "./lib/localMode";
 import { createAppClient } from "./lib/supabaseClient";
 import { recoveryLinkState, type RecoveryLinkState } from "./lib/passwordRecovery";
 import { track } from "./lib/analytics";
+import { touchLastSeenIfDue } from "./lib/lastSeen";
 import { openingState, rememberHousehold } from "./lib/resume";
 import { AuthScreen, NewPasswordScreen } from "./screens/AuthScreen";
 import { FamilyScreen } from "./screens/FamilyScreen";
@@ -79,6 +80,7 @@ export function App() {
     if (!client || !session) return;
     const userId = session.user.id;
     let ignore = false;
+    void touchLastSeenIfDue(client, localStorage, userId);
     void (async () => {
       const existing = await client
         .from("household_members")

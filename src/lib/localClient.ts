@@ -277,6 +277,9 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
           save(db);
           return { data: householdId, error: null };
         }
+        if (name === "touch_last_seen") {
+          return { data: null, error: null };
+        }
         if (name === "create_invite") {
           const member = db.members.find((item) => item.user_id === userId);
           if (!member) return { data: null, error: { message: "not in a household" } };

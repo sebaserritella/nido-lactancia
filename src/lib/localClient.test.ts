@@ -52,6 +52,13 @@ describe("local client", () => {
     expect(bottle.error).toBeNull();
   });
 
+  it("accepts touch_last_seen when signed in", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const touched = await client.rpc("touch_last_seen");
+    expect(touched.error).toBeNull();
+  });
+
   it("invites an existing user by email and joins a later signup", async () => {
     const storage = memoryStorage();
     const owner = createLocalClient(storage);
