@@ -95,6 +95,14 @@ export const es = {
   noDiapersYet: "Todavía no hay pañales.",
   yesterday: "ayer",
   dayBeforeYesterday: "anteayer",
+  agoLessThanMinute: "Hace menos de 1 minuto",
+  agoMinutes: (minutes: number) => (minutes === 1 ? "Hace 1 minuto" : `Hace ${minutes} minutos`),
+  agoHours: (hours: number, minutes: number) => {
+    const hourPart = hours === 1 ? "Hace 1 hora" : `Hace ${hours} horas`;
+    if (minutes === 0) return hourPart;
+    const minutePart = minutes === 1 ? "1 minuto" : `${minutes} minutos`;
+    return `${hourPart} y ${minutePart}`;
+  },
   from: "Desde",
   to: "Hasta",
   previousPeriod: "Anterior",
