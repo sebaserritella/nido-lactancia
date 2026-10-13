@@ -62,7 +62,7 @@ export function FeedLog({
             const ids = block.feeds.map((feed) => feed.id);
             return (
               <li key={block.sessionId} className="feed-group">
-                <div className="entry-line group-head">
+                <div className="feed-group-row">
                   <input
                     className="feed-check"
                     type="checkbox"
@@ -70,23 +70,27 @@ export function FeedLog({
                     checked={ids.every((id) => selectedIds.has(id))}
                     onChange={() => onToggle(ids)}
                   />
-                  <div className="entry-copy">
-                    <strong>
-                      {es.oneFeed} · {spanLabel(block.feeds, timeZone)}
-                    </strong>
+                  <div className="feed-group-body">
+                    <div className="entry-line group-head">
+                      <div className="entry-copy">
+                        <strong>
+                          {es.oneFeed} · {spanLabel(block.feeds, timeZone)}
+                        </strong>
+                      </div>
+                      <button type="button" className="ghost" onClick={() => onUngroup(block.sessionId)}>
+                        {es.ungroup}
+                      </button>
+                    </div>
+                    <ul className="nested">
+                      {block.feeds.map((feed) => (
+                        <li key={feed.id}>
+                          <FeedLine feed={feed} timeZone={timeZone} />
+                          {renderExtra?.(feed)}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <button type="button" className="ghost" onClick={() => onUngroup(block.sessionId)}>
-                    {es.ungroup}
-                  </button>
                 </div>
-                <ul className="nested">
-                  {block.feeds.map((feed) => (
-                    <li key={feed.id}>
-                      <FeedLine feed={feed} timeZone={timeZone} />
-                      {renderExtra?.(feed)}
-                    </li>
-                  ))}
-                </ul>
               </li>
             );
           }

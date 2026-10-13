@@ -141,8 +141,6 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
 
 .entries.plain li { background: transparent; padding: 8px 0; }
 
-.entries li div:first-child { display: grid; }
-
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
 .stats p,
@@ -203,6 +201,33 @@ details summary { min-height: 44px; display: flex; align-items: center; cursor: 
   border: 1px solid #ddcfc0;
 }
 
+.feed-group-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.feed-group-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.feed-group .group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.feed-group .group-head button.ghost {
+  min-height: 36px;
+  padding: 0 12px;
+  flex: none;
+}
+
 .feed-group .nested {
   list-style: none;
   margin: 0;
@@ -216,10 +241,16 @@ details summary { min-height: 44px; display: flex; align-items: center; cursor: 
 
 input.feed-check {
   width: 22px;
+  height: 22px;
   min-height: 22px;
   margin: 0;
   padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   accent-color: #241c18;
+  flex: none;
+  align-self: center;
 }
 
 .entries li.suggest {
