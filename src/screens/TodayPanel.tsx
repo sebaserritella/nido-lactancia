@@ -118,6 +118,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     successNotice?: SuccessNotice | (() => SuccessNotice),
   ): Promise<{ ok: boolean; error: { code?: string; message?: string } | null }> {
     setError(null);
+    setSuccess(null);
     const { error: writeError } = await action();
     if (writeError) {
       setError(messageForError(writeError));
