@@ -131,7 +131,7 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
 
 .entries { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 
-.entries li {
+.entries > li {
   background: #fffdf9;
   border-radius: 16px;
   padding: 12px;
@@ -139,7 +139,24 @@ h2 { font-size: 1rem; margin: 0 0 8px; }
   gap: 8px;
 }
 
-.entries.plain li { background: transparent; padding: 8px 0; }
+.entries.plain > li {
+  background: transparent;
+  padding: 8px 0;
+}
+
+.entries.plain > li.feed-group {
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.entries.plain .feed-group-row {
+  align-items: flex-start;
+}
+
+.entries.plain .feed-group .feed-check {
+  align-self: flex-start;
+  margin-top: 7px;
+}
 
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
@@ -236,7 +253,10 @@ details summary { min-height: 44px; display: flex; align-items: center; cursor: 
 
 .feed-group .nested li {
   background: transparent;
+  border-radius: 0;
   padding: 8px 0 0;
+  display: block;
+  gap: 0;
 }
 
 input.feed-check {
@@ -250,10 +270,9 @@ input.feed-check {
   background: transparent;
   accent-color: #241c18;
   flex: none;
-  align-self: center;
 }
 
-.entries li.suggest {
+.entries > li.suggest {
   background: #f3e2c4;
 }
 
