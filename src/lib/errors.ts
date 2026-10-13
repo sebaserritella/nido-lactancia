@@ -15,6 +15,12 @@ export function messageForError(error: { code?: string; message?: string }): str
   if (normalized.includes("weight") && code === "23505") {
     return es.weightDayExists;
   }
+  if (normalized.includes("measure_present") && code === "23514") {
+    return es.needWeightOrLength;
+  }
+  if (normalized.includes("length") && code === "23514") {
+    return es.invalidLength;
+  }
   if (normalized.includes("weight") && code === "23514") {
     return es.invalidWeight;
   }

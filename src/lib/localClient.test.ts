@@ -164,6 +164,54 @@ describe("local client", () => {
       .insert({ household_id: household.data, baby_id: babyId, weighed_on: "2026-10-02", grams: 0 });
     expect(absurd.error?.code).toBe("23514");
 
+    const lengthOnly = await client
+      .from("weights")
+      .insert({
+        household_id: household.data,
+        baby_id: babyId,
+        weighed_on: "2026-10-03",
+        grams: null,
+        length_mm: 525,
+      })
+      .select("id, grams, length_mm")
+      .single();
+    expect(lengthOnly.error).toBeNull();
+    expect(lengthOnly.data).toMatchObject({ grams: null, length_mm: 525 });
+
+    const both = await client
+      .from("weights")
+      .insert({
+        household_id: household.data,
+        baby_id: babyId,
+        weighed_on: "2026-10-04",
+        grams: 3600,
+        length_mm: 530,
+      })
+      .select("id, grams, length_mm")
+      .single();
+    expect(both.error).toBeNull();
+    expect(both.data).toMatchObject({ grams: 3600, length_mm: 530 });
+
+    const emptyMeasure = await client.from("weights").insert({
+      household_id: household.data,
+      baby_id: babyId,
+      weighed_on: "2026-10-05",
+      grams: null,
+      length_mm: null,
+    });
+    expect(emptyMeasure.error?.code).toBe("23514");
+    expect(emptyMeasure.error?.message).toBe("weights_measure_present");
+
+    const shortLength = await client.from("weights").insert({
+      household_id: household.data,
+      baby_id: babyId,
+      weighed_on: "2026-10-06",
+      grams: null,
+      length_mm: 199,
+    });
+    expect(shortLength.error?.code).toBe("23514");
+    expect(shortLength.error?.message).toBe("weights_length_mm_check");
+
     await client.from("babies").delete().eq("id", babyId);
     const remaining = await client.from("weights").select("id").eq("baby_id", babyId);
     expect(remaining.data).toEqual([]);

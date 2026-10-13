@@ -5,6 +5,7 @@ import { es } from "../i18n/es";
 import { formatCalendarDate } from "../lib/age";
 import { messageForError } from "../lib/errors";
 import { trackRejected, trackSaved } from "../lib/analytics";
+import { centimetersToMillimeters, formatCentimeters } from "../lib/length";
 import { todayLocalDate } from "../lib/localTime";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
 
@@ -14,7 +15,7 @@ type WeightSectionProps = {
   timeZone: string;
 };
 
-const weightColumns = "id, household_id, baby_id, weighed_on, grams";
+const weightColumns = "id, household_id, baby_id, weighed_on, grams, length_mm";
 
 export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
   const [weights, setWeights] = useState<Weight[]>([]);
@@ -53,12 +54,31 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
     };
   }, [baby.id, client, tick]);
 
-  async function save(weighedOn: string, kgText: string, previousId?: string) {
-    const grams = kilogramsToGrams(kgText);
-    if (grams === null) {
-      setError(es.invalidWeight);
+  async function save(weighedOn: string, kgText: string, cmText: string, previousId?: string) {
+    const kgTrimmed = kgText.trim();
+    const cmTrimmed = cmText.trim();
+    if (!kgTrimmed && !cmTrimmed) {
+      setError(es.needWeightOrLength);
       trackRejected("weight_logged");
       return;
+    }
+    let grams: number | null = null;
+    if (kgTrimmed) {
+      grams = kilogramsToGrams(kgTrimmed);
+      if (grams === null) {
+        setError(es.invalidWeight);
+        trackRejected("weight_logged");
+        return;
+      }
+    }
+    let lengthMm: number | null = null;
+    if (cmTrimmed) {
+      lengthMm = centimetersToMillimeters(cmTrimmed);
+      if (lengthMm === null) {
+        setError(es.invalidLength);
+        trackRejected("weight_logged");
+        return;
+      }
     }
     setError(null);
     const { data, error: writeError } = await client
@@ -69,6 +89,7 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
           baby_id: baby.id,
           weighed_on: weighedOn,
           grams,
+          length_mm: lengthMm,
         },
         { onConflict: "baby_id,weighed_on" },
       )
@@ -123,41 +144,48 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
         <WeightForm
           initialDate={today}
           initialKg=""
+          initialCm=""
           onCancel={() => setAdding(false)}
-          onSave={(date, kg) => save(date, kg)}
+          onSave={(date, kg, cm) => save(date, kg, cm)}
         />
       ) : null}
       {error ? <p className="error">{error}</p> : null}
       {weights.length === 0 ? <p className="muted">{es.noWeights}</p> : null}
       {weights.length > 0 ? (
-      <ul className="entries plain">
-        {weights.map((weight) => (
-          <li key={weight.id}>
-            <div>
-              <strong>{formatCalendarDate(weight.weighed_on)}</strong>
-              <span>
-                {formatKilograms(weight.grams)} {es.kg}
-              </span>
-            </div>
-            <div className="row-actions">
-              <button type="button" className="ghost" onClick={() => setEditingId(weight.id)}>
-                {es.editWeight}
-              </button>
-              <button type="button" className="ghost" onClick={() => remove(weight.id)}>
-                {es.deleteWeight}
-              </button>
-            </div>
-            {editingId === weight.id ? (
-              <WeightForm
-                initialDate={weight.weighed_on}
-                initialKg={formatKilograms(weight.grams)}
-                onCancel={() => setEditingId(null)}
-                onSave={(date, kg) => save(date, kg, weight.id)}
-              />
-            ) : null}
-          </li>
-        ))}
-      </ul>
+        <ul className="entries plain">
+          {weights.map((weight) => (
+            <li key={weight.id}>
+              <div className="entry-copy weight-meta">
+                <strong>{formatCalendarDate(weight.weighed_on)}</strong>
+                <span>
+                  {[
+                    weight.grams != null ? `${formatKilograms(weight.grams)} ${es.kg}` : null,
+                    weight.length_mm != null ? `${formatCentimeters(weight.length_mm)} ${es.cm}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </div>
+              <div className="row-actions">
+                <button type="button" className="ghost" onClick={() => setEditingId(weight.id)}>
+                  {es.editWeight}
+                </button>
+                <button type="button" className="ghost" onClick={() => remove(weight.id)}>
+                  {es.deleteWeight}
+                </button>
+              </div>
+              {editingId === weight.id ? (
+                <WeightForm
+                  initialDate={weight.weighed_on}
+                  initialKg={weight.grams != null ? formatKilograms(weight.grams) : ""}
+                  initialCm={weight.length_mm != null ? formatCentimeters(weight.length_mm) : ""}
+                  onCancel={() => setEditingId(null)}
+                  onSave={(date, kg, cm) => save(date, kg, cm, weight.id)}
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
       ) : null}
     </section>
   );
@@ -166,23 +194,26 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
 function WeightForm({
   initialDate,
   initialKg,
+  initialCm,
   onCancel,
   onSave,
 }: {
   initialDate: string;
   initialKg: string;
+  initialCm: string;
   onCancel: () => void;
-  onSave: (date: string, kg: string) => void;
+  onSave: (date: string, kg: string, cm: string) => void;
 }) {
   const [date, setDate] = useState(initialDate);
   const [kg, setKg] = useState(initialKg);
+  const [cm, setCm] = useState(initialCm);
 
   return (
     <form
       className="stack"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave(date, kg);
+        onSave(date, kg, cm);
       }}
     >
       <label>
@@ -192,11 +223,19 @@ function WeightForm({
       <label>
         {es.weightKg}
         <input
-          required
           inputMode="decimal"
           placeholder="3,270"
           value={kg}
           onChange={(event) => setKg(event.target.value)}
+        />
+      </label>
+      <label>
+        {es.weightCm}
+        <input
+          inputMode="decimal"
+          placeholder="52,5"
+          value={cm}
+          onChange={(event) => setCm(event.target.value)}
         />
       </label>
       <button type="submit">{es.save}</button>

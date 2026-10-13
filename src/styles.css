@@ -278,7 +278,12 @@ input.feed-check {
 
 .entry-copy {
   display: grid;
+  gap: 4px;
   min-width: 0;
+}
+
+.entry-copy.weight-meta {
+  gap: 6px;
 }
 
 button.with-icon {

@@ -47,7 +47,8 @@ type WeightRow = {
   household_id: string;
   baby_id: string;
   weighed_on: string;
-  grams: number;
+  grams: number | null;
+  length_mm: number | null;
   created_at: string;
 };
 
@@ -466,6 +467,8 @@ class Query {
       if (this.table === "feeds" && row.paused_at === undefined) row.paused_at = null;
       if (this.table === "feeds" && row.session_id === undefined) row.session_id = null;
       if (this.table === "babies" && row.born_on === undefined) row.born_on = null;
+      if (this.table === "weights" && row.grams === undefined) row.grams = null;
+      if (this.table === "weights" && row.length_mm === undefined) row.length_mm = null;
       const constraint = constraintError(db, this.table, row, null);
       if (constraint) return { data: null, error: constraint };
       rows.push(row);
@@ -594,9 +597,19 @@ function project(row: Row, columns: string): Row {
 
 function constraintError(db: Database, table: string, row: Row, ignoreId: string | null): ErrorResult {
   if (table === "weights") {
-    const grams = row.grams;
-    if (typeof grams !== "number" || !Number.isInteger(grams) || grams <= 0 || grams >= 30_000) {
+    const grams = row.grams ?? null;
+    const lengthMm = row.length_mm ?? null;
+    if (grams !== null && (typeof grams !== "number" || !Number.isInteger(grams) || grams <= 0 || grams >= 30_000)) {
       return { code: "23514", message: "weights_grams_check" };
+    }
+    if (
+      lengthMm !== null &&
+      (typeof lengthMm !== "number" || !Number.isInteger(lengthMm) || lengthMm < 200 || lengthMm > 1200)
+    ) {
+      return { code: "23514", message: "weights_length_mm_check" };
+    }
+    if (grams === null && lengthMm === null) {
+      return { code: "23514", message: "weights_measure_present" };
     }
     const duplicate = db.weights.find(
       (weight) => weight.baby_id === row.baby_id && weight.weighed_on === row.weighed_on && weight.id !== ignoreId,

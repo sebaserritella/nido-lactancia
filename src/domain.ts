@@ -14,7 +14,8 @@ export type Weight = {
   household_id: string;
   baby_id: string;
   weighed_on: string;
-  grams: number;
+  grams: number | null;
+  length_mm: number | null;
 };
 
 export type Feed = {
