@@ -448,3 +448,39 @@ button.day-jump.selected {
   margin: 0;
   font-size: 1rem;
 }
+
+.success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(36, 28, 24, 0.35);
+}
+
+.success-dialog {
+  width: min(22rem, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 20px 16px 16px;
+  background: #fffdf9;
+  border-radius: 18px;
+  box-shadow: 0 8px 28px rgba(36, 28, 24, 0.12);
+}
+
+.success-dialog h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.success-dialog .success-lines {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.success-dialog .success-lines p {
+  margin: 0;
+  color: #6e625a;
+}

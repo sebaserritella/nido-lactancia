@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LatestSummary } from "../components/LatestSummary";
+import { SuccessDialog } from "../components/SuccessDialog";
 import { FeedLog } from "../components/FeedLog";
 import { DiaperIcon, FeedIcon } from "../components/EventIcons";
 import type { Baby } from "../domain";
@@ -8,7 +9,14 @@ import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedKind, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
 import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
-import { activeElapsedMs, closePause } from "../lib/feedDuration";
+import { activeElapsedMs, activeMinutes, closePause } from "../lib/feedDuration";
+import {
+  bottleSavedNotice,
+  breastSavedNotice,
+  breastStartedNotice,
+  diaperSavedNotice,
+  type SuccessNotice,
+} from "../lib/successCopy";
 import { summarizeDay } from "../lib/daySummary";
 import { formatElapsed, formatMinutes, formatStat } from "../lib/format";
 import { assignSessionId, type DismissedPair } from "../lib/feedSessions";
@@ -33,6 +41,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [side, setSide] = useState<FeedSide>("left");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<SuccessNotice | null>(null);
   const [backfill, setBackfill] = useState(false);
   const [diaperBackfill, setDiaperBackfill] = useState(false);
   const [editing, setEditing] = useState<Feed | null>(null);
@@ -106,26 +115,34 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   async function run(
     action: () => PromiseLike<{ error: { code?: string; message?: string } | null }>,
+    successNotice?: SuccessNotice | (() => SuccessNotice),
   ): Promise<{ ok: boolean; error: { code?: string; message?: string } | null }> {
     setError(null);
+    setSuccess(null);
     const { error: writeError } = await action();
     if (writeError) {
       setError(messageForError(writeError));
       return { ok: false, error: writeError };
     }
     setTick((value) => value + 1);
+    if (successNotice) {
+      setSuccess(typeof successNotice === "function" ? successNotice() : successNotice);
+    }
     return { ok: true, error: null };
   }
 
   async function startFeed() {
-    const saved = await run(() =>
-      client.from("feeds").insert({
-        household_id: baby.household_id,
-        baby_id: baby.id,
-        started_at: new Date().toISOString(),
-        side,
-        created_by: userId,
-      }),
+    const startedAt = new Date().toISOString();
+    const saved = await run(
+      () =>
+        client.from("feeds").insert({
+          household_id: baby.household_id,
+          baby_id: baby.id,
+          started_at: startedAt,
+          side,
+          created_by: userId,
+        }),
+      () => breastStartedNotice(side, startedAt, timeZone),
     );
     trackAttempt("feed_started", saved.ok, saved.error);
   }
@@ -145,22 +162,36 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   async function stopFeed() {
     if (!open) return;
-    const now = Date.now();
-    const saved = await run(() =>
-      client.from("feeds").update({ ...closePause(open, now), ended_at: new Date(now).toISOString() }).eq("id", open.id),
+    const stopNow = Date.now();
+    const endedAt = new Date(stopNow).toISOString();
+    const closed = closePause(open, stopNow);
+    const saved = await run(
+      () => client.from("feeds").update({ ...closed, ended_at: endedAt }).eq("id", open.id),
+      () =>
+        breastSavedNotice({
+          side: open.side ?? "both",
+          startedAtIso: open.started_at,
+          endedAtIso: endedAt,
+          minutes: activeMinutes({ ...open, ...closed, ended_at: endedAt }, stopNow),
+          updated: false,
+          timeZone,
+        }),
     );
     trackAttempt("feed_stopped", saved.ok, saved.error);
   }
 
   async function logDiaper(kind: DiaperKind) {
-    const saved = await run(() =>
-      client.from("diapers").insert({
-        household_id: baby.household_id,
-        baby_id: baby.id,
-        occurred_at: new Date().toISOString(),
-        kind,
-        created_by: userId,
-      }),
+    const occurredAt = new Date().toISOString();
+    const saved = await run(
+      () =>
+        client.from("diapers").insert({
+          household_id: baby.household_id,
+          baby_id: baby.id,
+          occurred_at: occurredAt,
+          kind,
+          created_by: userId,
+        }),
+      () => diaperSavedNotice(kind, occurredAt, timeZone, false),
     );
     trackSaved("diaper_logged", "now", saved.ok, saved.error);
   }
@@ -190,15 +221,21 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     }
     const iso = when.toISOString();
     const payload = { started_at: iso, ended_at: iso, side: null, kind: "bottle" as const, ml, paused_ms: 0, paused_at: null };
+    const updated = Boolean(feedId);
     const saved = feedId
-      ? await run(() => client.from("feeds").update(payload).eq("id", feedId))
-      : await run(() =>
-          client.from("feeds").insert({
-            ...payload,
-            household_id: baby.household_id,
-            baby_id: baby.id,
-            created_by: userId,
-          }),
+      ? await run(
+          () => client.from("feeds").update(payload).eq("id", feedId),
+          () => bottleSavedNotice(ml, iso, timeZone, updated),
+        )
+      : await run(
+          () =>
+            client.from("feeds").insert({
+              ...payload,
+              household_id: baby.household_id,
+              baby_id: baby.id,
+              created_by: userId,
+            }),
+          () => bottleSavedNotice(ml, iso, timeZone, false),
         );
     trackSaved("bottle_logged", feedId ? "edit" : bottleBackfill ? "past" : "now", saved.ok, saved.error);
     if (!saved.ok) return;
@@ -215,16 +252,39 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
       trackRejected("feed_logged");
       return;
     }
-    const payload = { started_at: start.toISOString(), ended_at: end?.toISOString() ?? null, side: nextSide };
+    const startedAtIso = start.toISOString();
+    const endedAtIso = end?.toISOString() ?? null;
+    const updated = Boolean(feedId);
+    const payload = { started_at: startedAtIso, ended_at: endedAtIso, side: nextSide };
+    const breastNotice = () => {
+      let minutes: number | null = null;
+      if (end) {
+        if (feedId && editing?.id === feedId) {
+          minutes = activeMinutes({ ...editing, started_at: startedAtIso, ended_at: endedAtIso });
+        } else {
+          minutes = (end.getTime() - start.getTime()) / 60_000;
+        }
+      }
+      return breastSavedNotice({
+        side: nextSide,
+        startedAtIso,
+        endedAtIso,
+        minutes,
+        updated,
+        timeZone,
+      });
+    };
     const saved = feedId
-      ? await run(() => client.from("feeds").update(payload).eq("id", feedId))
-      : await run(() =>
-          client.from("feeds").insert({
-            ...payload,
-            household_id: baby.household_id,
-            baby_id: baby.id,
-            created_by: userId,
-          }),
+      ? await run(() => client.from("feeds").update(payload).eq("id", feedId), breastNotice)
+      : await run(
+          () =>
+            client.from("feeds").insert({
+              ...payload,
+              household_id: baby.household_id,
+              baby_id: baby.id,
+              created_by: userId,
+            }),
+          breastNotice,
         );
     trackSaved("feed_logged", feedId ? "edit" : "past", saved.ok, saved.error);
     if (!saved.ok) return;
@@ -233,8 +293,10 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   }
 
   async function saveDiaper(id: string, local: string, kind: DiaperKind) {
-    const saved = await run(() =>
-      client.from("diapers").update({ occurred_at: zonedTimeToUtc(local, timeZone).toISOString(), kind }).eq("id", id),
+    const occurredAt = zonedTimeToUtc(local, timeZone).toISOString();
+    const saved = await run(
+      () => client.from("diapers").update({ occurred_at: occurredAt, kind }).eq("id", id),
+      () => diaperSavedNotice(kind, occurredAt, timeZone, true),
     );
     trackSaved("diaper_logged", "edit", saved.ok, saved.error);
     if (saved.ok) setEditingDiaper(null);
@@ -242,14 +304,17 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   async function savePastDiaper(local: string, kind: DiaperKind) {
     if (local === "") return;
-    const saved = await run(() =>
-      client.from("diapers").insert({
-        household_id: baby.household_id,
-        baby_id: baby.id,
-        occurred_at: zonedTimeToUtc(local, timeZone).toISOString(),
-        kind,
-        created_by: userId,
-      }),
+    const occurredAt = zonedTimeToUtc(local, timeZone).toISOString();
+    const saved = await run(
+      () =>
+        client.from("diapers").insert({
+          household_id: baby.household_id,
+          baby_id: baby.id,
+          occurred_at: occurredAt,
+          kind,
+          created_by: userId,
+        }),
+      () => diaperSavedNotice(kind, occurredAt, timeZone, false),
     );
     trackSaved("diaper_logged", "past", saved.ok, saved.error);
     if (saved.ok) setDiaperBackfill(false);
@@ -313,6 +378,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   return (
     <div className="stack">
+      {success ? <SuccessDialog notice={success} onClose={() => setSuccess(null)} /> : null}
       <LatestSummary client={client} userId={userId} babyId={baby.id} timeZone={timeZone} refreshKey={tick} />
       <div className="segment" role="group" aria-label={es.logMode}>
         <button type="button" aria-pressed={action === "feed"} className={action === "feed" ? "selected with-icon" : "ghost with-icon"} onClick={() => setAction("feed")}>
