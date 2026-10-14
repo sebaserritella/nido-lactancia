@@ -322,12 +322,14 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
 
   async function removeFeed(id: string) {
     if (!window.confirm(es.confirmDeleteFeed)) return;
-    await run(() => client.from("feeds").delete().eq("id", id));
+    const saved = await run(() => client.from("feeds").delete().eq("id", id));
+    trackAttempt("feed_deleted", saved.ok, saved.error);
   }
 
   async function removeDiaper(id: string) {
     if (!window.confirm(es.confirmDeleteDiaper)) return;
-    await run(() => client.from("diapers").delete().eq("id", id));
+    const saved = await run(() => client.from("diapers").delete().eq("id", id));
+    trackAttempt("diaper_deleted", saved.ok, saved.error);
   }
 
   function toggleSelected(ids: string[]) {
@@ -352,26 +354,30 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
       if (writeError) {
         setError(messageForError(writeError));
         setTick((value) => value + 1);
+        trackAttempt("feeds_grouped", false, writeError);
         return;
       }
     }
+    trackAttempt("feeds_grouped", true);
     setSelectedIds(new Set());
     setTick((value) => value + 1);
   }
 
   async function ungroup(sessionId: string) {
     const saved = await run(() => client.from("feeds").update({ session_id: null }).eq("session_id", sessionId).eq("baby_id", baby.id));
+    trackAttempt("feeds_ungrouped", saved.ok, saved.error);
     if (saved.ok) setSelectedIds(new Set());
   }
 
   async function dismissPair(earlierId: string, laterId: string) {
-    await run(() =>
+    const saved = await run(() =>
       client.from("feed_pair_dismissals").insert({
         household_id: baby.household_id,
         earlier_feed_id: earlierId,
         later_feed_id: laterId,
       }),
     );
+    trackAttempt("feed_pair_dismissed", saved.ok, saved.error);
   }
 
   const today = todayLocalDate(timeZone);

@@ -4,7 +4,7 @@ import type { Baby, Weight } from "../domain";
 import { es } from "../i18n/es";
 import { formatCalendarDate } from "../lib/age";
 import { messageForError } from "../lib/errors";
-import { trackRejected, trackSaved } from "../lib/analytics";
+import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
 import { centimetersToMillimeters, formatCentimeters } from "../lib/length";
 import { todayLocalDate } from "../lib/localTime";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
@@ -120,8 +120,10 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
     const { error: deleteError } = await client.from("weights").delete().eq("id", id);
     if (deleteError) {
       setError(messageForError(deleteError));
+      trackAttempt("weight_deleted", false, deleteError);
       return;
     }
+    trackAttempt("weight_deleted", true);
     setTick((value) => value + 1);
   }
 

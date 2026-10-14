@@ -29,6 +29,12 @@ const actions = [
   "diaper_logged",
   "bottle_logged",
   "weight_logged",
+  "feed_deleted",
+  "diaper_deleted",
+  "weight_deleted",
+  "feeds_grouped",
+  "feeds_ungrouped",
+  "feed_pair_dismissed",
 ] as const;
 
 const resultEvents = new Set<string>([
@@ -44,6 +50,12 @@ const resultEvents = new Set<string>([
   "feed_paused",
   "feed_resumed",
   "feed_stopped",
+  "feed_deleted",
+  "diaper_deleted",
+  "weight_deleted",
+  "feeds_grouped",
+  "feeds_ungrouped",
+  "feed_pair_dismissed",
 ]);
 
 const savedEvents = new Set<string>(["feed_logged", "diaper_logged", "bottle_logged", "weight_logged"]);
@@ -71,6 +83,12 @@ const schema: Record<string, { required: string[]; fields: Record<string, readon
   diaper_logged: { required: ["source"], fields: { source: ["now", "past", "edit"] } },
   bottle_logged: { required: ["source"], fields: { source: sources } },
   weight_logged: { required: ["source"], fields: { source: ["new", "edit"] } },
+  feed_deleted: { required: ["result"], fields: { result: results } },
+  diaper_deleted: { required: ["result"], fields: { result: results } },
+  weight_deleted: { required: ["result"], fields: { result: results } },
+  feeds_grouped: { required: ["result"], fields: { result: results } },
+  feeds_ungrouped: { required: ["result"], fields: { result: results } },
+  feed_pair_dismissed: { required: ["result"], fields: { result: results } },
   save_failed: { required: ["action", "reason"], fields: { action: actions, reason: ["invalid_input", "conflict", "unavailable"] } },
 };
 

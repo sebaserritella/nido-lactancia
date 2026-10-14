@@ -11,6 +11,7 @@ import { diapersChangedPerDay } from "../lib/computeRangeStats";
 import { sideMinutesPerDay } from "../lib/daySummary";
 import { bottleDaily } from "../lib/computeRangeStats";
 import { assignSessionId, type DismissedPair } from "../lib/feedSessions";
+import { trackAttempt } from "../lib/analytics";
 import { messageForError } from "../lib/errors";
 
 type HistoryPanelProps = {
@@ -124,16 +125,25 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
       if (writeError) {
         setError(messageForError(writeError));
         setTick((value) => value + 1);
+        trackAttempt("feeds_grouped", false, writeError);
         return;
       }
     }
+    trackAttempt("feeds_grouped", true);
     setSelectedIds(new Set());
     setTick((value) => value + 1);
   }
 
   async function ungroup(sessionId: string) {
     const { error: writeError } = await client.from("feeds").update({ session_id: null }).eq("session_id", sessionId).eq("baby_id", baby.id);
-    if (writeError) setError(messageForError(writeError));
+    if (writeError) {
+      setError(messageForError(writeError));
+      trackAttempt("feeds_ungrouped", false, writeError);
+      setSelectedIds(new Set());
+      setTick((value) => value + 1);
+      return;
+    }
+    trackAttempt("feeds_ungrouped", true);
     setSelectedIds(new Set());
     setTick((value) => value + 1);
   }
@@ -144,7 +154,13 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
       earlier_feed_id: earlierId,
       later_feed_id: laterId,
     });
-    if (writeError) setError(messageForError(writeError));
+    if (writeError) {
+      setError(messageForError(writeError));
+      trackAttempt("feed_pair_dismissed", false, writeError);
+      setTick((value) => value + 1);
+      return;
+    }
+    trackAttempt("feed_pair_dismissed", true);
     setTick((value) => value + 1);
   }
 

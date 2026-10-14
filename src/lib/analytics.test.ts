@@ -31,6 +31,32 @@ describe("buildAnalyticsEvent", () => {
   it("rejects an unknown event", () => {
     expect(buildAnalyticsEvent("baby_weight", { grams: "6420" })).toBeNull();
   });
+
+  it("keeps result for delete, group, and dismiss events", () => {
+    for (const name of [
+      "feed_deleted",
+      "diaper_deleted",
+      "weight_deleted",
+      "feeds_grouped",
+      "feeds_ungrouped",
+      "feed_pair_dismissed",
+    ] as const) {
+      expect(buildAnalyticsEvent(name, { result: "ok", side: "left" })).toEqual({
+        name,
+        params: { result: "ok" },
+      });
+      expect(buildAnalyticsEvent(name, {})).toBeNull();
+    }
+  });
+
+  it("allows the new actions on save_failed", () => {
+    expect(
+      buildAnalyticsEvent("save_failed", { action: "feed_deleted", reason: "unavailable" }),
+    ).toEqual({ name: "save_failed", params: { action: "feed_deleted", reason: "unavailable" } });
+    expect(
+      buildAnalyticsEvent("save_failed", { action: "feeds_grouped", reason: "conflict" }),
+    ).toEqual({ name: "save_failed", params: { action: "feeds_grouped", reason: "conflict" } });
+  });
 });
 
 describe("failureReason", () => {
