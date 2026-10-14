@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:live-schema": "CHECK_LIVE_SCHEMA=1 vitest run src/lib/liveSchema.test.ts"
+    "check:live-schema": "CHECK_LIVE_SCHEMA=1 vitest run src/lib/liveSchema.test.ts",
+    "report:users": "node scripts/daily-users-report.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
