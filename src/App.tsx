@@ -8,7 +8,7 @@ import { createAppClient } from "./lib/supabaseClient";
 import { recoveryLinkState, type RecoveryLinkState } from "./lib/passwordRecovery";
 import { track } from "./lib/analytics";
 import { touchLastSeenIfDue } from "./lib/lastSeen";
-import { openingState, rememberHousehold } from "./lib/resume";
+import { forgetHousehold, openingState, rememberHousehold } from "./lib/resume";
 import { AuthScreen, NewPasswordScreen } from "./screens/AuthScreen";
 import { FamilyScreen } from "./screens/FamilyScreen";
 import { TrackerScreen } from "./screens/TrackerScreen";
@@ -202,6 +202,10 @@ export function App() {
       userId={session.user.id}
       timeZone={timeZone}
       onSignOut={() => void client.auth.signOut()}
+      onLeftHousehold={() => {
+        forgetHousehold(localStorage, session.user.id);
+        setHouseholdId(null);
+      }}
     />
   );
 }

@@ -5,11 +5,12 @@ import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
 import { birthDateIssue, formatBabyAge, formatCalendarDate } from "../lib/age";
 import { track, trackAttempt, trackRejected } from "../lib/analytics";
-import { normalizeEmail } from "../lib/email";
 import { messageForError } from "../lib/errors";
 import { readSupabaseEnv } from "../lib/env";
 import { todayLocalDate } from "../lib/localTime";
-import { openingState, rememberBabies, rememberTab } from "../lib/resume";
+import { openingState, rememberBabies, rememberTab, type ResumeTab } from "../lib/resume";
+import { FamilyPanel } from "./FamilyPanel";
+import { FichaPanel } from "./FichaPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { TodayPanel } from "./TodayPanel";
 
@@ -22,9 +23,17 @@ type TrackerScreenProps = {
   userId: string;
   timeZone: string;
   onSignOut: () => void;
+  onLeftHousehold: () => void;
 };
 
-export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut }: TrackerScreenProps) {
+export function TrackerScreen({
+  client,
+  householdId,
+  userId,
+  timeZone,
+  onSignOut,
+  onLeftHousehold,
+}: TrackerScreenProps) {
   const [stored] = useState(() => openingState(localStorage, readSupabaseEnv()));
   const restored = stored.userId === userId && stored.householdId === householdId;
   const [babies, setBabies] = useState<Baby[]>(() => (restored ? stored.babies : []));
@@ -35,18 +44,10 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     if (saved && stored.babies.some((baby) => baby.id === saved)) return saved;
     return stored.babies[0]?.id ?? null;
   });
-  const [tab, setTab] = useState<"today" | "history">(() => (restored ? stored.tab : "today"));
+  const [tab, setTab] = useState<ResumeTab>(() => (restored ? stored.tab : "today"));
   const [name, setName] = useState("");
   const [bornOn, setBornOn] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editBornOn, setEditBornOn] = useState("");
-  const [renameForId, setRenameForId] = useState<string | null>(null);
-  const [babiesOpen, setBabiesOpen] = useState(false);
   const [familyOpen, setFamilyOpen] = useState(false);
-  const [relativeEmail, setRelativeEmail] = useState("");
-  const [invitePending, setInvitePending] = useState(false);
-  const [inviteSent, setInviteSent] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -145,230 +146,134 @@ export function TrackerScreen({ client, householdId, userId, timeZone, onSignOut
     trackAttempt("baby_created", true);
   }
 
-  async function saveBaby(event: FormEvent) {
-    event.preventDefault();
-    const baby = babies.find((item) => item.id === selectedId);
-    if (!baby) return;
-    const trimmed = editName.trim();
-    if (!trimmed) return;
-    const today = todayLocalDate(timeZone);
-    const issue = birthDateIssue(editBornOn, today, false);
-    if (issue) {
-      setError(birthMessage(issue));
-      trackRejected("baby_renamed");
-      return;
-    }
-    const nextBorn = editBornOn === "" ? null : editBornOn;
-    if (trimmed === baby.name && nextBorn === baby.born_on) return;
-    const { error: updateError } = await client
-      .from("babies")
-      .update({ name: trimmed, born_on: nextBorn })
-      .eq("id", baby.id);
-    if (updateError) {
-      setError(messageForError(updateError));
-      trackAttempt("baby_renamed", false, updateError);
-      return;
-    }
-    setBabies((current) =>
-      current.map((item) => (item.id === baby.id ? { ...item, name: trimmed, born_on: nextBorn } : item)),
-    );
-    setError(null);
-    trackAttempt("baby_renamed", true);
-  }
-
-  async function inviteRelative(event: FormEvent) {
-    event.preventDefault();
-    setInviteError(null);
-    setInviteSent(false);
-    let email: string;
-    try {
-      email = normalizeEmail(relativeEmail);
-    } catch {
-      setInviteError(es.invalidEmail);
-      trackRejected("caregiver_invited");
-      return;
-    }
-    setInvitePending(true);
-    const { error: sendError } = await client.rpc("invite_by_email", { p_email: email });
-    setInvitePending(false);
-    if (sendError) {
-      setInviteError(messageForError(sendError));
-      trackAttempt("caregiver_invited", false, sendError);
-      return;
-    }
-    setRelativeEmail("");
-    setInviteSent(true);
-    trackAttempt("caregiver_invited", true);
-  }
-
   const selected = babies.find((baby) => baby.id === selectedId) ?? null;
-  if (selected && renameForId !== selected.id) {
-    setRenameForId(selected.id);
-    setEditName(selected.name);
-    setEditBornOn(selected.born_on ?? "");
-  }
-
-  function addBabyForm(className: string) {
-    return (
-      <form className={className} onSubmit={addBaby}>
-        <label>
-          {es.babyName}
-          <input
-            required
-            aria-label={es.babyName}
-            placeholder={es.babyName}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </label>
-        <label>
-          {es.bornOn}
-          <input
-            required
-            type="date"
-            max={todayLocalDate(timeZone)}
-            value={bornOn}
-            onChange={(event) => setBornOn(event.target.value)}
-          />
-        </label>
-        <button type="submit">{es.addBaby}</button>
-      </form>
-    );
-  }
 
   return (
     <main className="shell">
       <header className="topbar">
         <h1>{es.appName}</h1>
-        <button
-          type="button"
-          className="ghost"
-          onClick={() => {
-            track("signed_out", { screen: tab });
-            onSignOut();
-          }}
-        >
-          {es.signOut}
-        </button>
-      </header>
-      <LocalBanner />
-      {babies.length > 0 ? (
-        <div className="choice">
-          {babies.map((baby) => {
-            const age = baby.born_on ? formatBabyAge(baby.born_on, todayLocalDate(timeZone)) : null;
-            return (
-              <button
-                key={baby.id}
-                type="button"
-                className={`${baby.born_on ? "with-meta " : ""}${baby.id === selectedId ? "selected" : "ghost"}`}
-                onClick={() => setSelectedId(baby.id)}
-              >
-                <span>{baby.name}</span>
-                {baby.born_on ? (
-                  <span className="baby-age">
-                    {formatCalendarDate(baby.born_on)}
-                    {age ? ` · ${age}` : ""}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : babiesKnown ? (
-        <>
-          <p className="muted">{es.noBabies}</p>
-          {addBabyForm("card stack")}
-        </>
-      ) : null}
-      {error ? <p className="error">{error}</p> : null}
-      {selected ? (
-        <>
-          <nav className="tabs">
-            <button type="button" className={tab === "today" ? "selected" : "ghost"} onClick={() => setTab("today")}>
-              {es.today}
-            </button>
-            <button type="button" className={tab === "history" ? "selected" : "ghost"} onClick={() => setTab("history")}>
-              {es.history}
-            </button>
-          </nav>
-          {tab === "today" ? (
-            <TodayPanel client={client} baby={selected} userId={userId} timeZone={timeZone} />
-          ) : (
-            <HistoryPanel client={client} baby={selected} timeZone={timeZone} />
-          )}
-        </>
-      ) : null}
-      <div className="stack">
         <div className="row-actions">
-          {babies.length > 0 ? (
-            <button
-              type="button"
-              className="ghost"
-              aria-expanded={babiesOpen}
-              onClick={() => setBabiesOpen((open) => !open)}
-            >
-              {es.babies}
-            </button>
-          ) : null}
+          <button type="button" className="ghost" onClick={() => setFamilyOpen(true)}>
+            {es.family}
+          </button>
           <button
             type="button"
             className="ghost"
-            aria-expanded={familyOpen}
-            onClick={() => setFamilyOpen((open) => !open)}
+            onClick={() => {
+              track("signed_out", { screen: tab });
+              onSignOut();
+            }}
           >
-            {es.family}
+            {es.signOut}
           </button>
         </div>
-        {babiesOpen && babies.length > 0 ? (
-          <section className="card stack">
-            {selected ? (
-              <form className="stack" onSubmit={saveBaby}>
+      </header>
+      <LocalBanner />
+      {familyOpen ? (
+        <FamilyPanel
+          client={client}
+          onLeftHousehold={onLeftHousehold}
+          onClose={() => setFamilyOpen(false)}
+        />
+      ) : (
+        <>
+          {babies.length > 0 ? (
+            <div className="choice">
+              {babies.map((baby) => {
+                const age = baby.born_on ? formatBabyAge(baby.born_on, todayLocalDate(timeZone)) : null;
+                return (
+                  <button
+                    key={baby.id}
+                    type="button"
+                    className={`${baby.born_on ? "with-meta " : ""}${baby.id === selectedId ? "selected" : "ghost"}`}
+                    onClick={() => setSelectedId(baby.id)}
+                  >
+                    <span>{baby.name}</span>
+                    {baby.born_on ? (
+                      <span className="baby-age">
+                        {formatCalendarDate(baby.born_on)}
+                        {age ? ` · ${age}` : ""}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ) : babiesKnown ? (
+            <>
+              <p className="muted">{es.noBabies}</p>
+              <form className="card stack" onSubmit={(event) => void addBaby(event)}>
                 <label>
                   {es.babyName}
-                  <input required value={editName} onChange={(event) => setEditName(event.target.value)} />
+                  <input
+                    required
+                    aria-label={es.babyName}
+                    placeholder={es.babyName}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                  />
                 </label>
                 <label>
                   {es.bornOn}
                   <input
+                    required
                     type="date"
                     max={todayLocalDate(timeZone)}
-                    value={editBornOn}
-                    onChange={(event) => setEditBornOn(event.target.value)}
+                    value={bornOn}
+                    onChange={(event) => setBornOn(event.target.value)}
                   />
                 </label>
-                <button type="submit">{es.renameBaby}</button>
+                <button type="submit">{es.addBaby}</button>
               </form>
-            ) : null}
-            {addBabyForm("stack")}
-          </section>
-        ) : null}
-        {familyOpen ? (
-          <section className="card stack">
-            <h2>{es.inviteTitle}</h2>
-            <form className="stack" onSubmit={(event) => void inviteRelative(event)}>
-              <label>
-                {es.relativeEmail}
-                <input
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={relativeEmail}
-                  onChange={(event) => {
-                    setRelativeEmail(event.target.value);
-                    setInviteSent(false);
-                  }}
+            </>
+          ) : null}
+          {error ? <p className="error">{error}</p> : null}
+          {selected ? (
+            <>
+              <nav className="tabs">
+                <button
+                  type="button"
+                  className={tab === "today" ? "selected" : "ghost"}
+                  onClick={() => setTab("today")}
+                >
+                  {es.today}
+                </button>
+                <button
+                  type="button"
+                  className={tab === "history" ? "selected" : "ghost"}
+                  onClick={() => setTab("history")}
+                >
+                  {es.history}
+                </button>
+                <button
+                  type="button"
+                  className={tab === "ficha" ? "selected" : "ghost"}
+                  onClick={() => setTab("ficha")}
+                >
+                  {es.familyTabFicha}
+                </button>
+              </nav>
+              {tab === "today" ? (
+                <TodayPanel client={client} baby={selected} userId={userId} timeZone={timeZone} />
+              ) : tab === "history" ? (
+                <HistoryPanel client={client} baby={selected} timeZone={timeZone} />
+              ) : (
+                <FichaPanel
+                  client={client}
+                  householdId={householdId}
+                  userId={userId}
+                  timeZone={timeZone}
+                  babies={babies}
+                  selected={selected}
+                  onBabiesChange={setBabies}
+                  onSelectedIdChange={setSelectedId}
+                  onError={setError}
                 />
-              </label>
-              <p className="muted">{es.inviteHelp}</p>
-              <button type="submit" disabled={invitePending || relativeEmail.trim() === ""}>
-                {es.inviteTitle}
-              </button>
-            </form>
-            {inviteSent ? <p>{es.inviteSent}</p> : null}
-            {inviteError ? <p className="error">{inviteError}</p> : null}
-          </section>
-        ) : null}
-      </div>
+              )}
+            </>
+          ) : null}
+        </>
+      )}
     </main>
   );
 }

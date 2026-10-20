@@ -11,6 +11,12 @@ type UserRow = {
   passwordHash: string;
 };
 
+type HouseholdRow = {
+  id: string;
+  owner_id: string;
+  created_at: string;
+};
+
 type MemberRow = {
   household_id: string;
   user_id: string;
@@ -86,8 +92,30 @@ type FeedPairDismissalRow = {
   created_at: string;
 };
 
+type VaccineCatalogRow = {
+  id: string;
+  code: string;
+  name: string;
+  life_stage: string;
+  due_label: string;
+  sort_order: number;
+  active: boolean;
+};
+
+type BabyVaccinationRow = {
+  id: string;
+  baby_id: string;
+  catalog_id: string;
+  status: "pending" | "done";
+  given_on: string | null;
+  lot_number: string | null;
+  updated_by: string;
+  updated_at: string;
+};
+
 type Database = {
   users: UserRow[];
+  households: HouseholdRow[];
   members: MemberRow[];
   invites: InviteRow[];
   emailInvites: EmailInviteRow[];
@@ -96,6 +124,8 @@ type Database = {
   diapers: DiaperRow[];
   weights: WeightRow[];
   feedPairDismissals: FeedPairDismissalRow[];
+  vaccineCatalog: VaccineCatalogRow[];
+  babyVaccinations: BabyVaccinationRow[];
   sessionUserId: string | null;
 };
 
@@ -110,8 +140,9 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
     const raw = storage.getItem(storageKey);
     if (!raw) return emptyDatabase();
     const parsed = JSON.parse(raw) as Partial<Database>;
-    return {
+    const db: Database = {
       users: parsed.users ?? [],
+      households: parsed.households ?? [],
       members: parsed.members ?? [],
       invites: parsed.invites ?? [],
       emailInvites: parsed.emailInvites ?? [],
@@ -127,8 +158,12 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       diapers: parsed.diapers ?? [],
       weights: parsed.weights ?? [],
       feedPairDismissals: parsed.feedPairDismissals ?? [],
+      vaccineCatalog: parsed.vaccineCatalog?.length ? parsed.vaccineCatalog : seedVaccineCatalog(),
+      babyVaccinations: parsed.babyVaccinations ?? [],
       sessionUserId: parsed.sessionUserId ?? null,
     };
+    backfillHouseholdsFromMembers(db);
+    return db;
   }
 
   function save(db: Database) {
@@ -204,6 +239,7 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
           if (existing) return { data: existing.household_id, error: null };
           const householdId = crypto.randomUUID();
           const now = new Date().toISOString();
+          db.households.push({ id: householdId, owner_id: userId, created_at: now });
           db.members.push({ household_id: householdId, user_id: userId, created_at: now });
           db.invites.push({
             id: crypto.randomUUID(),
@@ -235,6 +271,10 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
           const email = normalizeEmail(args.p_email ?? "");
           const member = db.members.find((item) => item.user_id === userId);
           if (!member) return { data: null, error: { message: "not in a household" } };
+          const household = db.households.find((item) => item.id === member.household_id);
+          if (!household || household.owner_id !== userId) {
+            return { data: null, error: { message: "not household owner" } };
+          }
           const target = db.users.find((user) => user.email === email);
           if (target) {
             const targetMember = db.members.find((item) => item.user_id === target.id);
@@ -296,6 +336,73 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
           });
           save(db);
           return { data: code, error: null };
+        }
+        if (name === "list_household_people") {
+          const member = db.members.find((item) => item.user_id === userId);
+          if (!member) return { data: null, error: { message: "not in a household" } };
+          const household = db.households.find((item) => item.id === member.household_id);
+          const members = db.members
+            .filter((item) => item.household_id === member.household_id)
+            .map((item) => {
+              const user = db.users.find((u) => u.id === item.user_id);
+              return {
+                user_id: item.user_id,
+                email: user?.email ?? "",
+                is_owner: item.user_id === household?.owner_id,
+                is_self: item.user_id === userId,
+              };
+            });
+          const pending = db.emailInvites
+            .filter((item) => item.household_id === member.household_id)
+            .map((item) => ({ email: item.email, created_at: item.created_at }));
+          return { data: { members, pending }, error: null };
+        }
+        if (name === "remove_household_member") {
+          const member = db.members.find((item) => item.user_id === userId);
+          if (!member) return { data: null, error: { message: "not in a household" } };
+          const household = db.households.find((item) => item.id === member.household_id);
+          if (!household || household.owner_id !== userId) {
+            return { data: null, error: { message: "not household owner" } };
+          }
+          const targetId = args.p_user_id;
+          if (targetId === userId) return { data: null, error: { message: "cannot remove self" } };
+          if (targetId === household.owner_id) return { data: null, error: { message: "cannot remove owner" } };
+          const index = db.members.findIndex(
+            (item) => item.household_id === member.household_id && item.user_id === targetId,
+          );
+          if (index === -1) return { data: null, error: { message: "member not found" } };
+          db.members.splice(index, 1);
+          save(db);
+          return { data: null, error: null };
+        }
+        if (name === "cancel_email_invite") {
+          const member = db.members.find((item) => item.user_id === userId);
+          if (!member) return { data: null, error: { message: "not in a household" } };
+          const household = db.households.find((item) => item.id === member.household_id);
+          if (!household || household.owner_id !== userId) {
+            return { data: null, error: { message: "not household owner" } };
+          }
+          const email = normalizeEmail(args.p_email ?? "");
+          const before = db.emailInvites.length;
+          db.emailInvites = db.emailInvites.filter(
+            (item) => !(item.household_id === member.household_id && item.email === email),
+          );
+          if (db.emailInvites.length === before) {
+            return { data: null, error: { message: "invite not found" } };
+          }
+          save(db);
+          return { data: null, error: null };
+        }
+        if (name === "leave_household") {
+          const member = db.members.find((item) => item.user_id === userId);
+          if (!member) return { data: null, error: { message: "not in a household" } };
+          const household = db.households.find((item) => item.id === member.household_id);
+          if (household?.owner_id === userId) {
+            return { data: null, error: { message: "owner cannot leave" } };
+          }
+          db.members = db.members.filter((item) => !(item.household_id === member.household_id && item.user_id === userId));
+          save(db);
+          return { data: null, error: null };
         }
         if (name === "range_stats") {
           const baby = db.babies.find((item) => item.id === args.p_baby_id);
@@ -469,6 +576,12 @@ class Query {
       if (this.table === "babies" && row.born_on === undefined) row.born_on = null;
       if (this.table === "weights" && row.grams === undefined) row.grams = null;
       if (this.table === "weights" && row.length_mm === undefined) row.length_mm = null;
+      if (this.table === "baby_vaccinations") {
+        row.given_on = row.given_on ?? null;
+        row.lot_number = row.lot_number ?? null;
+        row.updated_by = db.sessionUserId;
+        row.updated_at = new Date().toISOString();
+      }
       const constraint = constraintError(db, this.table, row, null);
       if (constraint) return { data: null, error: constraint };
       rows.push(row);
@@ -476,12 +589,20 @@ class Query {
       return { data: this.shape === "many" ? null : project(row, this.columns), error: null };
     }
     let matched = rows.filter((row) => this.filters.every((filter) => matches(row, filter)));
+    if (this.table === "household_members" && this.operation === "select" && db.sessionUserId) {
+      matched = matched.filter((row) => row.user_id === db.sessionUserId);
+    }
     if (this.operation === "update") {
       for (const row of matched) {
-        const next = { ...row, ...this.payload };
+        const patch = { ...this.payload };
+        if (this.table === "baby_vaccinations") {
+          patch.updated_by = db.sessionUserId;
+          patch.updated_at = new Date().toISOString();
+        }
+        const next = { ...row, ...patch };
         const constraint = constraintError(db, this.table, next, String(row.id));
         if (constraint) return { data: null, error: constraint };
-        Object.assign(row, this.payload);
+        Object.assign(row, patch);
       }
       this.save(db);
       return { data: null, error: null };
@@ -496,6 +617,7 @@ class Query {
         db.feeds = db.feeds.filter((feed) => !ids.has(feed.baby_id));
         db.diapers = db.diapers.filter((diaper) => !ids.has(diaper.baby_id));
         db.weights = db.weights.filter((weight) => !ids.has(weight.baby_id));
+        db.babyVaccinations = db.babyVaccinations.filter((vaccination) => !ids.has(vaccination.baby_id));
       }
       if (this.table === "feeds") {
         db.feedPairDismissals = db.feedPairDismissals.filter(
@@ -541,9 +663,26 @@ function acceptNewestEmailInvite(db: Database, userId: string, email: string): s
   return newest.household_id;
 }
 
+function backfillHouseholdsFromMembers(db: Database) {
+  for (const member of db.members) {
+    if (db.households.some((household) => household.id === member.household_id)) continue;
+    const inHousehold = db.members
+      .filter((item) => item.household_id === member.household_id)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at) || left.user_id.localeCompare(right.user_id));
+    const owner = inHousehold[0];
+    if (!owner) continue;
+    db.households.push({
+      id: member.household_id,
+      owner_id: owner.user_id,
+      created_at: owner.created_at,
+    });
+  }
+}
+
 function emptyDatabase(): Database {
   return {
     users: [],
+    households: [],
     members: [],
     invites: [],
     emailInvites: [],
@@ -552,8 +691,55 @@ function emptyDatabase(): Database {
     diapers: [],
     weights: [],
     feedPairDismissals: [],
+    vaccineCatalog: seedVaccineCatalog(),
+    babyVaccinations: [],
     sessionUserId: null,
   };
+}
+
+/** Same codes / labels as supabase/migrations/0015_baby_vaccines.sql */
+function seedVaccineCatalog(): VaccineCatalogRow[] {
+  const seed: Omit<VaccineCatalogRow, "id" | "active">[] = [
+    { code: "hepb_birth", name: "Hepatitis B", life_stage: "newborn", due_label: "Al nacer", sort_order: 10 },
+    { code: "bcg_birth", name: "BCG", life_stage: "newborn", due_label: "Al nacer", sort_order: 20 },
+    { code: "pneumo_2m", name: "Neumococo", life_stage: "up_to_1y", due_label: "2 meses", sort_order: 110 },
+    { code: "polio_2m", name: "Polio", life_stage: "up_to_1y", due_label: "2 meses", sort_order: 120 },
+    { code: "quintuple_2m", name: "Quíntuple", life_stage: "up_to_1y", due_label: "2 meses", sort_order: 130 },
+    { code: "rota_2m", name: "Rotavirus", life_stage: "up_to_1y", due_label: "2 meses", sort_order: 140 },
+    { code: "meningo_3m", name: "Meningococo", life_stage: "up_to_1y", due_label: "3 meses", sort_order: 150 },
+    { code: "pneumo_4m", name: "Neumococo", life_stage: "up_to_1y", due_label: "4 meses", sort_order: 160 },
+    { code: "polio_4m", name: "Polio", life_stage: "up_to_1y", due_label: "4 meses", sort_order: 170 },
+    { code: "quintuple_4m", name: "Quíntuple", life_stage: "up_to_1y", due_label: "4 meses", sort_order: 180 },
+    { code: "rota_4m", name: "Rotavirus", life_stage: "up_to_1y", due_label: "4 meses", sort_order: 190 },
+    { code: "meningo_5m", name: "Meningococo", life_stage: "up_to_1y", due_label: "5 meses", sort_order: 200 },
+    { code: "polio_6m", name: "Polio", life_stage: "up_to_1y", due_label: "6 meses", sort_order: 210 },
+    { code: "quintuple_6m", name: "Quíntuple", life_stage: "up_to_1y", due_label: "6 meses", sort_order: 220 },
+    { code: "flu_6_24_1", name: "Antigripal", life_stage: "up_to_1y", due_label: "6 a 24 meses · 1ª", sort_order: 230 },
+    { code: "flu_6_24_2", name: "Antigripal", life_stage: "up_to_1y", due_label: "6 a 24 meses · 2ª", sort_order: 240 },
+    { code: "pneumo_12m", name: "Neumococo", life_stage: "up_to_1y", due_label: "12 meses", sort_order: 250 },
+    { code: "hepa_12m", name: "Hepatitis A", life_stage: "up_to_1y", due_label: "12 meses", sort_order: 260 },
+    { code: "mmr_12m", name: "Triple viral", life_stage: "up_to_1y", due_label: "12 meses", sort_order: 270 },
+    { code: "meningo_15m", name: "Meningococo", life_stage: "up_to_2y", due_label: "15 meses", sort_order: 310 },
+    { code: "varicella_15m", name: "Varicela", life_stage: "up_to_2y", due_label: "15 meses", sort_order: 320 },
+    { code: "quintuple_15_18m", name: "Quíntuple", life_stage: "up_to_2y", due_label: "15 a 18 meses", sort_order: 330 },
+    { code: "mmr_5y", name: "Triple viral", life_stage: "age_5", due_label: "5 años", sort_order: 410 },
+    { code: "polio_5y", name: "Polio", life_stage: "age_5", due_label: "5 años", sort_order: 420 },
+    { code: "triple_bac_5y", name: "Triple bacteriana", life_stage: "age_5", due_label: "5 años", sort_order: 430 },
+  ];
+  return seed.map((item) => ({
+    ...item,
+    id: stableCatalogId(item.code),
+    active: true,
+  }));
+}
+
+function stableCatalogId(code: string): string {
+  const hex = [...new TextEncoder().encode(code)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+    .padEnd(32, "0")
+    .slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 function rowsOf(db: Database, table: string): Row[] {
@@ -565,6 +751,8 @@ function rowsOf(db: Database, table: string): Row[] {
   if (table === "diapers") return db.diapers as unknown as Row[];
   if (table === "weights") return db.weights as unknown as Row[];
   if (table === "feed_pair_dismissals") return db.feedPairDismissals as unknown as Row[];
+  if (table === "vaccine_catalog") return db.vaccineCatalog as unknown as Row[];
+  if (table === "baby_vaccinations") return db.babyVaccinations as unknown as Row[];
   return [];
 }
 
@@ -574,6 +762,8 @@ function replaceRows(db: Database, table: string, rows: Row[]) {
   if (table === "diapers") db.diapers = rows as unknown as DiaperRow[];
   if (table === "weights") db.weights = rows as unknown as WeightRow[];
   if (table === "feed_pair_dismissals") db.feedPairDismissals = rows as unknown as FeedPairDismissalRow[];
+  if (table === "vaccine_catalog") db.vaccineCatalog = rows as unknown as VaccineCatalogRow[];
+  if (table === "baby_vaccinations") db.babyVaccinations = rows as unknown as BabyVaccinationRow[];
   if (table === "invites") db.invites = rows as unknown as InviteRow[];
   if (table === "email_invites") db.emailInvites = rows as unknown as EmailInviteRow[];
   if (table === "household_members") db.members = rows as unknown as MemberRow[];
@@ -596,6 +786,22 @@ function project(row: Row, columns: string): Row {
 }
 
 function constraintError(db: Database, table: string, row: Row, ignoreId: string | null): ErrorResult {
+  if (table === "baby_vaccinations") {
+    if (row.status !== "pending" && row.status !== "done") {
+      return { code: "23514", message: "baby_vaccinations_status_check" };
+    }
+    if (row.given_on != null) {
+      const todayUtc = new Date().toISOString().slice(0, 10);
+      if (String(row.given_on) > todayUtc) {
+        return { code: "23514", message: "baby_vaccinations_given_on_not_future" };
+      }
+    }
+    const duplicate = db.babyVaccinations.find(
+      (item) => item.baby_id === row.baby_id && item.catalog_id === row.catalog_id && item.id !== ignoreId,
+    );
+    if (duplicate) return { code: "23505", message: "baby_vaccinations_baby_id_catalog_id_key" };
+    return null;
+  }
   if (table === "weights") {
     const grams = row.grams ?? null;
     const lengthMm = row.length_mm ?? null;

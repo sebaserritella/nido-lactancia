@@ -24,8 +24,14 @@ export function messageForError(error: { code?: string; message?: string }): str
   if (normalized.includes("weight") && code === "23514") {
     return es.invalidWeight;
   }
+  if (code === "23505" && normalized.includes("baby_vaccinations")) {
+    return es.vaccineAlreadySaved;
+  }
   if (code === "23505") {
     return openFeed;
+  }
+  if (normalized.includes("given_on_not_future")) {
+    return es.vaccineFutureDate;
   }
   if (code === "23514" || normalized.includes("feeds_ended_after_start")) {
     return badInterval;
@@ -53,6 +59,18 @@ export function messageForError(error: { code?: string; message?: string }): str
   }
   if (normalized.includes("email address") && normalized.includes("invalid")) {
     return "Ingresá un correo válido, por ejemplo nombre@gmail.com.";
+  }
+  if (normalized.includes("not household owner")) {
+    return es.notHouseholdOwner;
+  }
+  if (normalized.includes("owner cannot leave")) {
+    return es.ownerCannotLeave;
+  }
+  if (normalized.includes("cannot remove self") || normalized.includes("cannot remove owner")) {
+    return es.notHouseholdOwner;
+  }
+  if (normalized.includes("member not found") || normalized.includes("invite not found")) {
+    return generic;
   }
   return generic;
 }

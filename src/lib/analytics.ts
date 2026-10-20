@@ -8,6 +8,7 @@ const screens = [
   "create_family",
   "today",
   "history",
+  "ficha",
 ] as const;
 
 const results = ["ok", "error"] as const;

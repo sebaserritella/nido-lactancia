@@ -50,3 +50,32 @@ export type RangeStats = {
   both_diapers_per_day: number | null;
   mean_gap_minutes: number | null;
 };
+
+export type VaccineLifeStage =
+  | "pregnancy"
+  | "newborn"
+  | "up_to_1y"
+  | "up_to_2y"
+  | "age_5"
+  | "age_11"
+  | "age_15_64"
+  | "age_65_plus";
+
+export type VaccineCatalogItem = {
+  id: string;
+  code: string;
+  name: string;
+  life_stage: VaccineLifeStage;
+  due_label: string;
+  sort_order: number;
+  active: boolean;
+};
+
+export type BabyVaccination = {
+  id: string;
+  baby_id: string;
+  catalog_id: string;
+  status: "pending" | "done";
+  given_on: string | null;
+  lot_number: string | null;
+};

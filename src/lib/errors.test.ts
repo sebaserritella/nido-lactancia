@@ -11,4 +11,19 @@ describe("messageForError", () => {
     expect(messageForError({ message: "Invalid login credentials" })).toMatch(/contraseña/);
     expect(messageForError({ message: "Email address not authorized" })).toMatch(/mail de prueba/);
   });
+
+  it("explains a future vaccine date from the database check", () => {
+    expect(
+      messageForError({ code: "23514", message: "baby_vaccinations_given_on_not_future" }),
+    ).toMatch(/futura/);
+  });
+
+  it("explains a duplicate baby vaccination", () => {
+    expect(
+      messageForError({
+        code: "23505",
+        message: 'duplicate key value violates unique constraint "baby_vaccinations_baby_id_catalog_id_key"',
+      }),
+    ).toMatch(/ya está anotada/);
+  });
 });

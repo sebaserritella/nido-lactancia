@@ -61,7 +61,7 @@ input {
 .card {
   background: #fffdf9;
   border-radius: 18px;
-  padding: 16px;
+  padding: 16px 16px 28px;
   box-shadow: 0 1px 0 rgba(36, 28, 24, 0.04);
 }
 
@@ -284,6 +284,85 @@ input.feed-check {
 
 .entry-copy.weight-meta {
   gap: 6px;
+}
+
+.vaccines h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.vaccine-stage-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #3d3631;
+}
+
+.vaccine-list > li {
+  display: grid;
+  gap: 8px;
+}
+
+.vaccine-row {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid #e6ddd4;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1a1512;
+  text-align: left;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.vaccine-row .muted {
+  color: #5c534c;
+}
+
+.vaccine-meta {
+  font-size: 0.9rem;
+  color: #3d3631;
+}
+
+.vaccine-badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.vaccine-badge-done {
+  background: #d8f0e2;
+  color: #1f5c38;
+}
+
+.vaccine-badge-pending {
+  background: #ffe8c2;
+  color: #6b4508;
+}
+
+.vaccines-form {
+  padding: 12px;
+  border: 1px solid #d8d0c8;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1a1512;
+}
+
+.vaccines-form label {
+  color: #3d3631;
+  font-weight: 600;
+}
+
+.vaccines-form input {
+  background: #ffffff;
+  color: #1a1512;
+  border: 1.5px solid #b7aea5;
+  font-weight: 500;
 }
 
 button.with-icon {

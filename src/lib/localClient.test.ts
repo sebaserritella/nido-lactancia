@@ -287,4 +287,88 @@ describe("local client", () => {
     const pairs = await client.from("feed_pair_dismissals").select("earlier_feed_id").eq("household_id", household.data);
     expect(pairs.data).toEqual([]);
   });
+
+  it("lists people, restricts invite to owner, and lets a member leave", async () => {
+    const storage = memoryStorage();
+    const owner = createLocalClient(storage);
+    await owner.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await owner.rpc("bootstrap_household");
+    expect(typeof household.data).toBe("string");
+
+    const partner = createLocalClient(storage);
+    await partner.auth.signUp({ email: "papa@example.com", password: "secret2" });
+    await owner.auth.signInWithPassword({ email: "mama@example.com", password: "secret1" });
+    await owner.rpc("invite_by_email", { p_email: "papa@example.com" });
+
+    await partner.auth.signInWithPassword({ email: "papa@example.com", password: "secret2" });
+    const asMemberInvite = await partner.rpc("invite_by_email", { p_email: "abuela@example.com" });
+    expect(asMemberInvite.error?.message).toMatch(/not household owner/i);
+
+    const listed = await partner.rpc("list_household_people");
+    expect(listed.error).toBeNull();
+    const people = listed.data as {
+      members: { email: string; is_owner: boolean; is_self: boolean }[];
+      pending: { email: string }[];
+    };
+    expect(people.members).toHaveLength(2);
+    expect(people.members.some((m) => m.is_owner && m.email === "mama@example.com")).toBe(true);
+
+    const left = await partner.rpc("leave_household");
+    expect(left.error).toBeNull();
+    const membership = await partner.from("household_members").select("household_id").maybeSingle();
+    expect(membership.data).toBeNull();
+  });
+
+  it("rejects owner leave and allows owner remove", async () => {
+    const storage = memoryStorage();
+    const owner = createLocalClient(storage);
+    await owner.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    await owner.rpc("bootstrap_household");
+    const partner = createLocalClient(storage);
+    await partner.auth.signUp({ email: "papa@example.com", password: "secret2" });
+    await owner.auth.signInWithPassword({ email: "mama@example.com", password: "secret1" });
+    await owner.rpc("invite_by_email", { p_email: "papa@example.com" });
+
+    const ownerLeave = await owner.rpc("leave_household");
+    expect(ownerLeave.error?.message).toMatch(/owner cannot leave/i);
+
+    const db = JSON.parse(storage.getItem("nido-lactancia.local-db") ?? "{}") as {
+      users: { id: string; email: string }[];
+    };
+    const partnerUserId = db.users.find((u) => u.email === "papa@example.com")!.id;
+    const removed = await owner.rpc("remove_household_member", { p_user_id: partnerUserId });
+    expect(removed.error).toBeNull();
+  });
+
+  it("saves a baby vaccination with optional date and lot", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const catalog = await client.from("vaccine_catalog").select("id, code").eq("code", "bcg_birth").single();
+    const babyId = (baby.data as { id: string }).id;
+    const catalogId = (catalog.data as { id: string }).id;
+
+    const saved = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: catalogId,
+      status: "done",
+      given_on: null,
+      lot_number: null,
+    });
+    expect(saved.error).toBeNull();
+
+    const withDate = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: (await client.from("vaccine_catalog").select("id").eq("code", "hepb_birth").single()).data!.id,
+      status: "done",
+      given_on: "2099-01-01",
+      lot_number: "X",
+    });
+    expect(withDate.error).toBeTruthy();
+  });
 });

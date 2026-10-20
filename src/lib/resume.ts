@@ -3,7 +3,7 @@ import type { Baby, DiaperKind, FeedKind, FeedSide } from "../domain";
 export const localDbKey = "nido-lactancia.local-db";
 export const resumeKey = "nido-lactancia.resume";
 
-export type ResumeTab = "today" | "history";
+export type ResumeTab = "today" | "history" | "ficha";
 
 export type CachedFeed = {
   id: string;
@@ -84,7 +84,7 @@ export function readResume(storage: Pick<Storage, "getItem">, userId: string): R
       userId,
       householdId: parsed.householdId,
       babies,
-      tab: parsed.tab === "history" ? "history" : "today",
+      tab: parsed.tab === "history" ? "history" : parsed.tab === "ficha" ? "ficha" : "today",
       latest: sanitizeLatest(parsed.latest),
     };
   } catch {
@@ -101,6 +101,12 @@ export function rememberHousehold(storage: StorageLike, userId: string, househol
     tab: current?.tab ?? "today",
     latest: current?.householdId === householdId ? current.latest : {},
   });
+}
+
+export function forgetHousehold(storage: StorageLike, userId: string): void {
+  const current = readResume(storage, userId);
+  if (!current) return;
+  storage.removeItem(resumeKey);
 }
 
 export function rememberBabies(storage: StorageLike, userId: string, householdId: string, babies: Baby[]): void {
