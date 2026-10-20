@@ -7,6 +7,12 @@ export type Baby = {
   household_id: string;
   name: string;
   born_on: string | null;
+  pediatrician_name: string | null;
+  pediatrician_phone: string | null;
+  blood_type: string | null;
+  allergies: string | null;
+  health_insurance: string | null;
+  health_insurance_card: string | null;
 };
 
 export type Weight = {
@@ -78,4 +84,14 @@ export type BabyVaccination = {
   status: "pending" | "done";
   given_on: string | null;
   lot_number: string | null;
+};
+
+export type PediatricVisit = {
+  id: string;
+  baby_id: string;
+  visited_on: string;
+  reason: string;
+  notes: string | null;
+  grams: number | null;
+  length_mm: number | null;
 };

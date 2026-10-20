@@ -45,6 +45,12 @@ type BabyRow = {
   household_id: string;
   name: string;
   born_on: string | null;
+  pediatrician_name: string | null;
+  pediatrician_phone: string | null;
+  blood_type: string | null;
+  allergies: string | null;
+  health_insurance: string | null;
+  health_insurance_card: string | null;
   created_at: string;
 };
 
@@ -113,6 +119,18 @@ type BabyVaccinationRow = {
   updated_at: string;
 };
 
+type PediatricVisitRow = {
+  id: string;
+  baby_id: string;
+  visited_on: string;
+  reason: string;
+  notes: string | null;
+  grams: number | null;
+  length_mm: number | null;
+  updated_by: string;
+  updated_at: string;
+};
+
 type Database = {
   users: UserRow[];
   households: HouseholdRow[];
@@ -126,6 +144,7 @@ type Database = {
   feedPairDismissals: FeedPairDismissalRow[];
   vaccineCatalog: VaccineCatalogRow[];
   babyVaccinations: BabyVaccinationRow[];
+  pediatricVisits: PediatricVisitRow[];
   sessionUserId: string | null;
 };
 
@@ -146,7 +165,16 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       members: parsed.members ?? [],
       invites: parsed.invites ?? [],
       emailInvites: parsed.emailInvites ?? [],
-      babies: (parsed.babies ?? []).map((baby) => ({ ...baby, born_on: baby.born_on ?? null })),
+      babies: (parsed.babies ?? []).map((baby) => ({
+        ...baby,
+        born_on: baby.born_on ?? null,
+        pediatrician_name: baby.pediatrician_name ?? null,
+        pediatrician_phone: baby.pediatrician_phone ?? null,
+        blood_type: baby.blood_type ?? null,
+        allergies: baby.allergies ?? null,
+        health_insurance: baby.health_insurance ?? null,
+        health_insurance_card: baby.health_insurance_card ?? null,
+      })),
       feeds: (parsed.feeds ?? []).map((feed) => ({
         ...feed,
         kind: feed.kind ?? "breast",
@@ -160,6 +188,7 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       feedPairDismissals: parsed.feedPairDismissals ?? [],
       vaccineCatalog: parsed.vaccineCatalog?.length ? parsed.vaccineCatalog : seedVaccineCatalog(),
       babyVaccinations: parsed.babyVaccinations ?? [],
+      pediatricVisits: parsed.pediatricVisits ?? [],
       sessionUserId: parsed.sessionUserId ?? null,
     };
     backfillHouseholdsFromMembers(db);
@@ -404,6 +433,25 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
           save(db);
           return { data: null, error: null };
         }
+        if (name === "transfer_household_ownership") {
+          const member = db.members.find((item) => item.user_id === userId);
+          if (!member) return { data: null, error: { message: "not in a household" } };
+          const household = db.households.find((item) => item.id === member.household_id);
+          if (!household || household.owner_id !== userId) {
+            return { data: null, error: { message: "not household owner" } };
+          }
+          const targetId = args.p_user_id;
+          if (targetId === userId) {
+            return { data: null, error: { message: "cannot transfer to self" } };
+          }
+          const targetMember = db.members.find(
+            (item) => item.household_id === member.household_id && item.user_id === targetId,
+          );
+          if (!targetMember) return { data: null, error: { message: "member not found" } };
+          household.owner_id = targetId;
+          save(db);
+          return { data: null, error: null };
+        }
         if (name === "range_stats") {
           const baby = db.babies.find((item) => item.id === args.p_baby_id);
           const member = db.members.find((item) => item.user_id === userId);
@@ -574,11 +622,24 @@ class Query {
       if (this.table === "feeds" && row.paused_at === undefined) row.paused_at = null;
       if (this.table === "feeds" && row.session_id === undefined) row.session_id = null;
       if (this.table === "babies" && row.born_on === undefined) row.born_on = null;
+      if (this.table === "babies" && row.pediatrician_name === undefined) row.pediatrician_name = null;
+      if (this.table === "babies" && row.pediatrician_phone === undefined) row.pediatrician_phone = null;
+      if (this.table === "babies" && row.blood_type === undefined) row.blood_type = null;
+      if (this.table === "babies" && row.allergies === undefined) row.allergies = null;
+      if (this.table === "babies" && row.health_insurance === undefined) row.health_insurance = null;
+      if (this.table === "babies" && row.health_insurance_card === undefined) row.health_insurance_card = null;
       if (this.table === "weights" && row.grams === undefined) row.grams = null;
       if (this.table === "weights" && row.length_mm === undefined) row.length_mm = null;
       if (this.table === "baby_vaccinations") {
         row.given_on = row.given_on ?? null;
         row.lot_number = row.lot_number ?? null;
+        row.updated_by = db.sessionUserId;
+        row.updated_at = new Date().toISOString();
+      }
+      if (this.table === "pediatric_visits") {
+        row.notes = row.notes ?? null;
+        row.grams = row.grams ?? null;
+        row.length_mm = row.length_mm ?? null;
         row.updated_by = db.sessionUserId;
         row.updated_at = new Date().toISOString();
       }
@@ -595,7 +656,7 @@ class Query {
     if (this.operation === "update") {
       for (const row of matched) {
         const patch = { ...this.payload };
-        if (this.table === "baby_vaccinations") {
+        if (this.table === "baby_vaccinations" || this.table === "pediatric_visits") {
           patch.updated_by = db.sessionUserId;
           patch.updated_at = new Date().toISOString();
         }
@@ -618,6 +679,7 @@ class Query {
         db.diapers = db.diapers.filter((diaper) => !ids.has(diaper.baby_id));
         db.weights = db.weights.filter((weight) => !ids.has(weight.baby_id));
         db.babyVaccinations = db.babyVaccinations.filter((vaccination) => !ids.has(vaccination.baby_id));
+        db.pediatricVisits = db.pediatricVisits.filter((visit) => !ids.has(visit.baby_id));
       }
       if (this.table === "feeds") {
         db.feedPairDismissals = db.feedPairDismissals.filter(
@@ -693,6 +755,7 @@ function emptyDatabase(): Database {
     feedPairDismissals: [],
     vaccineCatalog: seedVaccineCatalog(),
     babyVaccinations: [],
+    pediatricVisits: [],
     sessionUserId: null,
   };
 }
@@ -753,6 +816,7 @@ function rowsOf(db: Database, table: string): Row[] {
   if (table === "feed_pair_dismissals") return db.feedPairDismissals as unknown as Row[];
   if (table === "vaccine_catalog") return db.vaccineCatalog as unknown as Row[];
   if (table === "baby_vaccinations") return db.babyVaccinations as unknown as Row[];
+  if (table === "pediatric_visits") return db.pediatricVisits as unknown as Row[];
   return [];
 }
 
@@ -764,6 +828,7 @@ function replaceRows(db: Database, table: string, rows: Row[]) {
   if (table === "feed_pair_dismissals") db.feedPairDismissals = rows as unknown as FeedPairDismissalRow[];
   if (table === "vaccine_catalog") db.vaccineCatalog = rows as unknown as VaccineCatalogRow[];
   if (table === "baby_vaccinations") db.babyVaccinations = rows as unknown as BabyVaccinationRow[];
+  if (table === "pediatric_visits") db.pediatricVisits = rows as unknown as PediatricVisitRow[];
   if (table === "invites") db.invites = rows as unknown as InviteRow[];
   if (table === "email_invites") db.emailInvites = rows as unknown as EmailInviteRow[];
   if (table === "household_members") db.members = rows as unknown as MemberRow[];
@@ -800,6 +865,24 @@ function constraintError(db: Database, table: string, row: Row, ignoreId: string
       (item) => item.baby_id === row.baby_id && item.catalog_id === row.catalog_id && item.id !== ignoreId,
     );
     if (duplicate) return { code: "23505", message: "baby_vaccinations_baby_id_catalog_id_key" };
+    return null;
+  }
+  if (table === "pediatric_visits") {
+    const grams = row.grams ?? null;
+    const lengthMm = row.length_mm ?? null;
+    if (grams !== null && (typeof grams !== "number" || !Number.isInteger(grams) || grams <= 0 || grams >= 30_000)) {
+      return { code: "23514", message: "pediatric_visits_grams_check" };
+    }
+    if (
+      lengthMm !== null &&
+      (typeof lengthMm !== "number" || !Number.isInteger(lengthMm) || lengthMm < 200 || lengthMm > 1200)
+    ) {
+      return { code: "23514", message: "pediatric_visits_length_mm_check" };
+    }
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (String(row.visited_on) > todayUtc) {
+      return { code: "23514", message: "pediatric_visits_visited_on_not_future" };
+    }
     return null;
   }
   if (table === "weights") {

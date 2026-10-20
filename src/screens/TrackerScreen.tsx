@@ -15,7 +15,21 @@ import { HistoryPanel } from "./HistoryPanel";
 import { TodayPanel } from "./TodayPanel";
 
 const babyStorageKey = "nido-lactancia.babyId";
-const babyColumns = "id, household_id, name, born_on";
+const babyColumns =
+  "id, household_id, name, born_on, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
+
+function normalizeBaby(row: Baby): Baby {
+  return {
+    ...row,
+    born_on: row.born_on ?? null,
+    pediatrician_name: row.pediatrician_name ?? null,
+    pediatrician_phone: row.pediatrician_phone ?? null,
+    blood_type: row.blood_type ?? null,
+    allergies: row.allergies ?? null,
+    health_insurance: row.health_insurance ?? null,
+    health_insurance_card: row.health_insurance_card ?? null,
+  };
+}
 
 type TrackerScreenProps = {
   client: SupabaseClient;
@@ -64,10 +78,18 @@ export function TrackerScreen({
           .select("id, household_id, name")
           .eq("household_id", householdId)
           .order("created_at");
-        data = ((retry.data ?? []) as Array<{ id: string; household_id: string; name: string }>).map((baby) => ({
-          ...baby,
-          born_on: null,
-        }));
+        data = ((retry.data ?? []) as Array<{ id: string; household_id: string; name: string }>).map((baby) =>
+          normalizeBaby({
+            ...baby,
+            born_on: null,
+            pediatrician_name: null,
+            pediatrician_phone: null,
+            blood_type: null,
+            allergies: null,
+            health_insurance: null,
+            health_insurance_card: null,
+          }),
+        );
         loadError = retry.error;
       }
       if (ignore) return;
@@ -75,7 +97,7 @@ export function TrackerScreen({
         setError(messageForError(loadError));
         return;
       }
-      const rows = ((data ?? []) as Baby[]).map((baby) => ({ ...baby, born_on: baby.born_on ?? null }));
+      const rows = ((data ?? []) as Baby[]).map((baby) => normalizeBaby(baby));
       setBabies(rows);
       setBabiesKnown(true);
       setSelectedId((current) => {
@@ -137,7 +159,7 @@ export function TrackerScreen({
       trackAttempt("baby_created", false, insertError);
       return;
     }
-    const baby = { ...(data as Baby), born_on: (data as Baby).born_on ?? null };
+    const baby = normalizeBaby(data as Baby);
     setBabies((current) => [...current, baby]);
     setSelectedId(baby.id);
     setName("");

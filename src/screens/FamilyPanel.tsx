@@ -78,6 +78,18 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
     await loadPeople();
   }
 
+  async function makeOwner(userId: string) {
+    if (!confirm(es.familyMakeOwnerConfirm)) return;
+    setBusy(true);
+    const { error: transferError } = await client.rpc("transfer_household_ownership", { p_user_id: userId });
+    setBusy(false);
+    if (transferError) {
+      setError(messageForError(transferError));
+      return;
+    }
+    await loadPeople();
+  }
+
   async function cancelInvite(email: string) {
     if (!confirm(es.familyCancelInviteConfirm)) return;
     setBusy(true);
@@ -123,9 +135,14 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
                   </p>
                 </div>
                 {isOwner && !member.is_self && !member.is_owner ? (
-                  <button type="button" className="ghost" disabled={busy} onClick={() => void removeMember(member.user_id)}>
-                    {es.familyRemove}
-                  </button>
+                  <div className="row-actions">
+                    <button type="button" className="ghost" disabled={busy} onClick={() => void makeOwner(member.user_id)}>
+                      {es.familyMakeOwner}
+                    </button>
+                    <button type="button" className="ghost" disabled={busy} onClick={() => void removeMember(member.user_id)}>
+                      {es.familyRemove}
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </li>

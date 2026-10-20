@@ -50,7 +50,20 @@ describe("opening state", () => {
     expect(openingState(storage, { url })).toEqual({
       userId: "user-1",
       householdId: "house-1",
-      babies: [{ id: "baby-1", household_id: "house-1", name: "Lola", born_on: "2026-06-01" }],
+      babies: [
+        {
+          id: "baby-1",
+          household_id: "house-1",
+          name: "Lola",
+          born_on: "2026-06-01",
+          pediatrician_name: null,
+          pediatrician_phone: null,
+          blood_type: null,
+          allergies: null,
+          health_insurance: null,
+          health_insurance_card: null,
+        },
+      ],
       tab: "today",
       latest: {},
     });
@@ -99,13 +112,37 @@ describe("opening state", () => {
     expect(openingState(storage, null)).toMatchObject({
       userId: "user-1",
       householdId: "house-1",
-      babies: [{ id: "baby-1", household_id: "house-1", name: "Lola", born_on: null }],
+      babies: [
+        {
+          id: "baby-1",
+          household_id: "house-1",
+          name: "Lola",
+          born_on: null,
+          pediatrician_name: null,
+          pediatrician_phone: null,
+          blood_type: null,
+          allergies: null,
+          health_insurance: null,
+          health_insurance_card: null,
+        },
+      ],
     });
   });
 
   it("remembers babies, the open tab, and the latest events for the next visit", () => {
     const storage = memory();
-    const baby = { id: "baby-1", household_id: "house-1", name: "Lola", born_on: "2026-06-01" };
+    const baby = {
+      id: "baby-1",
+      household_id: "house-1",
+      name: "Lola",
+      born_on: "2026-06-01",
+      pediatrician_name: null,
+      pediatrician_phone: null,
+      blood_type: null,
+      allergies: null,
+      health_insurance: null,
+      health_insurance_card: null,
+    };
     rememberBabies(storage, "user-1", "house-1", [baby]);
     rememberTab(storage, "user-1", "history");
     rememberLatest(storage, "user-1", "baby-1", {

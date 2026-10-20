@@ -79,7 +79,9 @@ export function readResume(storage: Pick<Storage, "getItem">, userId: string): R
   try {
     const parsed = JSON.parse(raw) as Partial<Resume>;
     if (parsed.userId !== userId || typeof parsed.householdId !== "string" || parsed.householdId === "") return null;
-    const babies = Array.isArray(parsed.babies) ? parsed.babies.filter(isBaby) : [];
+    const babies = Array.isArray(parsed.babies)
+      ? parsed.babies.map(normalizeBaby).filter((baby): baby is Baby => baby !== null)
+      : [];
     return {
       userId,
       householdId: parsed.householdId,
@@ -168,7 +170,10 @@ function openingFromLocal(storage: Pick<Storage, "getItem">): Opening {
       (item) => item.user_id === userId && typeof item.household_id === "string" && item.household_id !== "",
     );
     const householdId = typeof member?.household_id === "string" ? member.household_id : null;
-    const babies = (parsed.babies ?? []).filter(isBaby).filter((baby) => baby.household_id === householdId);
+    const babies = (parsed.babies ?? [])
+      .map(normalizeBaby)
+      .filter((baby): baby is Baby => baby !== null)
+      .filter((baby) => baby.household_id === householdId);
     const resume = readResume(storage, userId);
     return {
       userId,
@@ -185,12 +190,33 @@ function openingFromLocal(storage: Pick<Storage, "getItem">): Opening {
 function isBaby(value: unknown): value is Baby {
   if (!value || typeof value !== "object") return false;
   const baby = value as Record<string, unknown>;
-  return (
-    typeof baby.id === "string" &&
-    typeof baby.household_id === "string" &&
-    typeof baby.name === "string" &&
-    (baby.born_on === null || typeof baby.born_on === "string")
-  );
+  if (
+    typeof baby.id !== "string" ||
+    typeof baby.household_id !== "string" ||
+    typeof baby.name !== "string" ||
+    !(baby.born_on === null || typeof baby.born_on === "string")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeBaby(value: unknown): Baby | null {
+  if (!isBaby(value)) return null;
+  const baby = value as Baby & Record<string, unknown>;
+  return {
+    id: baby.id,
+    household_id: baby.household_id,
+    name: baby.name,
+    born_on: baby.born_on ?? null,
+    pediatrician_name: typeof baby.pediatrician_name === "string" ? baby.pediatrician_name : null,
+    pediatrician_phone: typeof baby.pediatrician_phone === "string" ? baby.pediatrician_phone : null,
+    blood_type: typeof baby.blood_type === "string" ? baby.blood_type : null,
+    allergies: typeof baby.allergies === "string" ? baby.allergies : null,
+    health_insurance: typeof baby.health_insurance === "string" ? baby.health_insurance : null,
+    health_insurance_card:
+      typeof baby.health_insurance_card === "string" ? baby.health_insurance_card : null,
+  };
 }
 
 function sanitizeLatest(value: unknown): Record<string, CachedLatest> {

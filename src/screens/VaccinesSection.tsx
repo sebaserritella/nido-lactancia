@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Baby, BabyVaccination, VaccineCatalogItem, VaccineLifeStage } from "../domain";
+import type { Baby, BabyVaccination, VaccineCatalogItem } from "../domain";
 import { es } from "../i18n/es";
 import { formatCalendarDate } from "../lib/age";
 import { messageForError } from "../lib/errors";
@@ -19,7 +19,6 @@ type VaccinesSectionProps = {
 
 export function VaccinesSection({ client, baby, userId, timeZone }: VaccinesSectionProps) {
   const [items, setItems] = useState<MergedVaccine[]>([]);
-  const [stages, setStages] = useState<VaccineLifeStage[]>([]);
   const [editingCatalogId, setEditingCatalogId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -42,7 +41,6 @@ export function VaccinesSection({ client, baby, userId, timeZone }: VaccinesSect
         setError(messageForError(rowsResult.error));
         return;
       }
-      setStages(nextStages);
       setItems(
         mergeVaccineRows(
           (catalogResult.data ?? []) as VaccineCatalogItem[],
@@ -95,12 +93,12 @@ export function VaccinesSection({ client, baby, userId, timeZone }: VaccinesSect
     setTick((value) => value + 1);
   }
 
-  const grouped = stages
-    .map((stage) => ({
-      stage,
-      rows: items.filter((item) => item.catalog.life_stage === stage),
-    }))
-    .filter((group) => group.rows.length > 0);
+  const grouped = (
+    [
+      { key: "pending", title: es.vaccinePendingGroup, rows: items.filter((item) => item.status !== "done") },
+      { key: "done", title: es.vaccineDoneGroup, rows: items.filter((item) => item.status === "done") },
+    ] as const
+  ).filter((group) => group.rows.length > 0);
 
   return (
     <section className="card stack vaccines">
@@ -109,8 +107,8 @@ export function VaccinesSection({ client, baby, userId, timeZone }: VaccinesSect
       </h2>
       {error ? <p className="error">{error}</p> : null}
       {grouped.map((group) => (
-        <div key={group.stage} className="vaccine-stage stack">
-          <h3 className="vaccine-stage-title">{stageTitle(group.stage)}</h3>
+        <div key={group.key} className="vaccine-stage stack">
+          <h3 className="vaccine-stage-title">{group.title}</h3>
           <ul className="entries plain vaccine-list">
             {group.rows.map((item) => {
               const open = editingCatalogId === item.catalog.id;
@@ -233,14 +231,6 @@ function VaccineForm({
       </div>
     </form>
   );
-}
-
-function stageTitle(stage: VaccineLifeStage): string {
-  if (stage === "newborn") return es.vaccineStageNewborn;
-  if (stage === "up_to_1y") return es.vaccineStageUpTo1y;
-  if (stage === "up_to_2y") return es.vaccineStageUpTo2y;
-  if (stage === "age_5") return es.vaccineStageAge5;
-  return stage;
 }
 
 function doneMeta(item: MergedVaccine): string {

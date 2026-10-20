@@ -340,6 +340,43 @@ describe("local client", () => {
     expect(removed.error).toBeNull();
   });
 
+  it("transfers ownership only from owner to another member", async () => {
+    const storage = memoryStorage();
+    const owner = createLocalClient(storage);
+    await owner.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    await owner.rpc("bootstrap_household");
+    const partner = createLocalClient(storage);
+    await partner.auth.signUp({ email: "papa@example.com", password: "secret2" });
+    await owner.auth.signInWithPassword({ email: "mama@example.com", password: "secret1" });
+    await owner.rpc("invite_by_email", { p_email: "papa@example.com" });
+
+    const db = JSON.parse(storage.getItem("nido-lactancia.local-db") ?? "{}") as {
+      users: { id: string; email: string }[];
+    };
+    const ownerUserId = db.users.find((u) => u.email === "mama@example.com")!.id;
+    const partnerUserId = db.users.find((u) => u.email === "papa@example.com")!.id;
+    const strangerId = "99999999-9999-9999-9999-999999999999";
+
+    await partner.auth.signInWithPassword({ email: "papa@example.com", password: "secret2" });
+    const asMember = await partner.rpc("transfer_household_ownership", { p_user_id: ownerUserId });
+    expect(asMember.error?.message).toMatch(/not household owner/i);
+
+    await owner.auth.signInWithPassword({ email: "mama@example.com", password: "secret1" });
+    const toSelf = await owner.rpc("transfer_household_ownership", { p_user_id: ownerUserId });
+    expect(toSelf.error?.message).toMatch(/cannot transfer to self/i);
+
+    const missing = await owner.rpc("transfer_household_ownership", { p_user_id: strangerId });
+    expect(missing.error?.message).toMatch(/member not found/i);
+
+    const transferred = await owner.rpc("transfer_household_ownership", { p_user_id: partnerUserId });
+    expect(transferred.error).toBeNull();
+
+    const listed = await owner.rpc("list_household_people");
+    const people = listed.data as { members: { user_id: string; is_owner: boolean }[] };
+    expect(people.members.find((m) => m.user_id === partnerUserId)?.is_owner).toBe(true);
+    expect(people.members.find((m) => m.user_id === ownerUserId)?.is_owner).toBe(false);
+  });
+
   it("saves a baby vaccination with optional date and lot", async () => {
     const client = createLocalClient(memoryStorage());
     await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
@@ -370,5 +407,55 @@ describe("local client", () => {
       lot_number: "X",
     });
     expect(withDate.error).toBeTruthy();
+  });
+
+  it("rejects a future pediatric visit date", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const babyId = (baby.data as { id: string }).id;
+
+    const future = await client.from("pediatric_visits").insert({
+      baby_id: babyId,
+      visited_on: "2099-01-01",
+      reason: "Control",
+      notes: null,
+      grams: null,
+      length_mm: null,
+    });
+    expect(future.error?.code).toBe("23514");
+    expect(future.error?.message).toMatch(/visited_on_not_future/);
+  });
+
+  it("allows a visit without measures", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const babyId = (baby.data as { id: string }).id;
+
+    const saved = await client
+      .from("pediatric_visits")
+      .insert({
+        baby_id: babyId,
+        visited_on: "2026-10-01",
+        reason: "Control",
+        notes: null,
+        grams: null,
+        length_mm: null,
+      })
+      .select("id, reason, grams, length_mm")
+      .single();
+    expect(saved.error).toBeNull();
+    expect(saved.data).toMatchObject({ reason: "Control", grams: null, length_mm: null });
   });
 });
