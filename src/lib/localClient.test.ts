@@ -409,6 +409,120 @@ describe("local client", () => {
     expect(withDate.error).toBeTruthy();
   });
 
+  it("inserts a custom vaccination without catalog_id", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const babyId = (baby.data as { id: string }).id;
+
+    const saved = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: null,
+      display_name: null,
+      custom_name: "Fiebre amarilla",
+      status: "pending",
+      given_on: null,
+      lot_number: null,
+    });
+    expect(saved.error).toBeNull();
+  });
+
+  it("allows two custom vaccinations for the same baby", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const babyId = (baby.data as { id: string }).id;
+
+    const first = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: null,
+      display_name: null,
+      custom_name: "Viaje — hepatitis A",
+      status: "done",
+      given_on: null,
+      lot_number: null,
+    });
+    const second = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: null,
+      display_name: null,
+      custom_name: "Gripe estacional",
+      status: "pending",
+      given_on: null,
+      lot_number: null,
+    });
+    expect(first.error).toBeNull();
+    expect(second.error).toBeNull();
+  });
+
+  it("rejects catalogue row with custom_name (XOR)", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const catalog = await client.from("vaccine_catalog").select("id").eq("code", "bcg_birth").single();
+    const babyId = (baby.data as { id: string }).id;
+    const catalogId = (catalog.data as { id: string }).id;
+
+    const bad = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: catalogId,
+      display_name: null,
+      custom_name: "Extra label",
+      status: "pending",
+      given_on: null,
+      lot_number: null,
+    });
+    expect(bad.error?.code).toBe("23514");
+    expect(bad.error?.message).toMatch(/catalog_xor_custom/);
+  });
+
+  it("rejects duplicate catalogue vaccination for same baby", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const catalog = await client.from("vaccine_catalog").select("id").eq("code", "bcg_birth").single();
+    const babyId = (baby.data as { id: string }).id;
+    const catalogId = (catalog.data as { id: string }).id;
+
+    const first = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: catalogId,
+      status: "pending",
+      given_on: null,
+      lot_number: null,
+    });
+    const duplicate = await client.from("baby_vaccinations").insert({
+      baby_id: babyId,
+      catalog_id: catalogId,
+      status: "done",
+      given_on: null,
+      lot_number: null,
+    });
+    expect(first.error).toBeNull();
+    expect(duplicate.error?.code).toBe("23505");
+    expect(duplicate.error?.message).toMatch(/baby_id_catalog_id_key/);
+  });
+
   it("rejects a future pediatric visit date", async () => {
     const client = createLocalClient(memoryStorage());
     await client.auth.signUp({ email: "mama@example.com", password: "secret1" });

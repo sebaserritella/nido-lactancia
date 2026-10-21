@@ -33,6 +33,9 @@ export function messageForError(error: { code?: string; message?: string }): str
   if (normalized.includes("given_on_not_future") || normalized.includes("visited_on_not_future")) {
     return es.vaccineFutureDate;
   }
+  if (normalized.includes("catalog_xor_custom") && code === "23514") {
+    return es.vaccineNeedCustomName;
+  }
   if (code === "23514" || normalized.includes("feeds_ended_after_start")) {
     return badInterval;
   }

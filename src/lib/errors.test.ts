@@ -33,6 +33,12 @@ describe("messageForError", () => {
     ).toMatch(/ya está anotada/);
   });
 
+  it("explains a vaccine catalogue XOR custom check", () => {
+    expect(
+      messageForError({ code: "23514", message: "baby_vaccinations_catalog_xor_custom" }),
+    ).toMatch(/nombre de la vacuna/);
+  });
+
   it("explains cannot transfer ownership to self", () => {
     expect(messageForError({ message: "cannot transfer to self" })).toMatch(/pasarte la creación/);
   });

@@ -111,7 +111,9 @@ type VaccineCatalogRow = {
 type BabyVaccinationRow = {
   id: string;
   baby_id: string;
-  catalog_id: string;
+  catalog_id: string | null;
+  display_name: string | null;
+  custom_name: string | null;
   status: "pending" | "done";
   given_on: string | null;
   lot_number: string | null;
@@ -631,6 +633,9 @@ class Query {
       if (this.table === "weights" && row.grams === undefined) row.grams = null;
       if (this.table === "weights" && row.length_mm === undefined) row.length_mm = null;
       if (this.table === "baby_vaccinations") {
+        row.catalog_id = row.catalog_id ?? null;
+        row.display_name = row.display_name ?? null;
+        row.custom_name = row.custom_name ?? null;
         row.given_on = row.given_on ?? null;
         row.lot_number = row.lot_number ?? null;
         row.updated_by = db.sessionUserId;
@@ -861,10 +866,20 @@ function constraintError(db: Database, table: string, row: Row, ignoreId: string
         return { code: "23514", message: "baby_vaccinations_given_on_not_future" };
       }
     }
-    const duplicate = db.babyVaccinations.find(
-      (item) => item.baby_id === row.baby_id && item.catalog_id === row.catalog_id && item.id !== ignoreId,
-    );
-    if (duplicate) return { code: "23505", message: "baby_vaccinations_baby_id_catalog_id_key" };
+    const catalogId = row.catalog_id ?? null;
+    const customName = row.custom_name == null ? null : String(row.custom_name).trim() || null;
+    const displayName = row.display_name == null ? null : String(row.display_name).trim() || null;
+    const catalogOk = catalogId != null && customName == null;
+    const customOk = catalogId == null && displayName == null && customName != null;
+    if (!catalogOk && !customOk) {
+      return { code: "23514", message: "baby_vaccinations_catalog_xor_custom" };
+    }
+    if (catalogId != null) {
+      const duplicate = db.babyVaccinations.find(
+        (item) => item.baby_id === row.baby_id && item.catalog_id === catalogId && item.id !== ignoreId,
+      );
+      if (duplicate) return { code: "23505", message: "baby_vaccinations_baby_id_catalog_id_key" };
+    }
     return null;
   }
   if (table === "pediatric_visits") {

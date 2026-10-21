@@ -80,7 +80,9 @@ export type VaccineCatalogItem = {
 export type BabyVaccination = {
   id: string;
   baby_id: string;
-  catalog_id: string;
+  catalog_id: string | null;
+  display_name: string | null;
+  custom_name: string | null;
   status: "pending" | "done";
   given_on: string | null;
   lot_number: string | null;

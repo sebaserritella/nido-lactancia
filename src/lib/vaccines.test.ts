@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeVaccineRows, visibleStagesForBaby } from "./vaccines";
+import { customVaccineRows, mergeVaccineRows, vaccineTitle, visibleStagesForBaby } from "./vaccines";
 
 describe("visibleStagesForBaby", () => {
   it("always includes newborn through up_to_2y when born_on is set and under 5", () => {
@@ -39,12 +39,87 @@ describe("mergeVaccineRows", () => {
     const merged = mergeVaccineRows(catalog, [], ["newborn"]);
     expect(merged).toEqual([
       {
+        kind: "catalog",
         catalog: catalog[0],
+        displayName: null,
         status: "pending",
         given_on: null,
         lot_number: null,
         rowId: null,
       },
     ]);
+  });
+
+  it("uses display_name as title override for catalogue rows", () => {
+    const catalog = [
+      {
+        id: "c1",
+        code: "bcg_birth",
+        name: "BCG",
+        life_stage: "newborn" as const,
+        due_label: "Al nacer",
+        sort_order: 1,
+        active: true,
+      },
+    ];
+    const rows = [
+      {
+        id: "r1",
+        baby_id: "b1",
+        catalog_id: "c1",
+        display_name: "BCG - carnet",
+        custom_name: null,
+        status: "done" as const,
+        given_on: "2026-09-26",
+        lot_number: null,
+      },
+    ];
+    const merged = mergeVaccineRows(catalog, rows, ["newborn"]);
+    expect(merged[0]).toMatchObject({
+      kind: "catalog",
+      displayName: "BCG - carnet",
+      status: "done",
+      rowId: "r1",
+    });
+    expect(vaccineTitle(merged[0]!)).toBe("BCG - carnet");
+  });
+
+  it("lists custom rows separately and ignores them in mergeVaccineRows", () => {
+    const catalog = [
+      {
+        id: "c1",
+        code: "bcg_birth",
+        name: "BCG",
+        life_stage: "newborn" as const,
+        due_label: "Al nacer",
+        sort_order: 1,
+        active: true,
+      },
+    ];
+    const rows = [
+      {
+        id: "r2",
+        baby_id: "b1",
+        catalog_id: null,
+        display_name: null,
+        custom_name: "Fiebre amarilla",
+        status: "done" as const,
+        given_on: "2026-01-01",
+        lot_number: "L1",
+      },
+    ];
+    expect(mergeVaccineRows(catalog, rows, ["newborn"])[0]?.rowId).toBeNull();
+    const customs = customVaccineRows(rows);
+    expect(customs).toEqual([
+      {
+        kind: "custom",
+        customName: "Fiebre amarilla",
+        status: "done",
+        given_on: "2026-01-01",
+        lot_number: "L1",
+        rowId: "r2",
+      },
+    ]);
+    expect(vaccineTitle(customs[0]!)).toBe("Fiebre amarilla");
   });
 });
