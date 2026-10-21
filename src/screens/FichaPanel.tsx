@@ -7,6 +7,7 @@ import { trackAttempt, trackRejected } from "../lib/analytics";
 import { messageForError } from "../lib/errors";
 import { todayLocalDate } from "../lib/localTime";
 import { whatsappUrl } from "../lib/whatsapp";
+import { DevelopmentSection } from "./DevelopmentSection";
 import { VaccinesSection } from "./VaccinesSection";
 import { VisitsSection } from "./VisitsSection";
 
@@ -343,6 +344,7 @@ export function FichaPanel({
         <VisitsSection client={client} baby={selected} userId={userId} timeZone={timeZone} />
       ) : null}
       {selected ? <VaccinesSection client={client} baby={selected} userId={userId} timeZone={timeZone} /> : null}
+      {selected ? <DevelopmentSection baby={selected} timeZone={timeZone} /> : null}
     </>
   );
 }

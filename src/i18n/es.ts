@@ -224,6 +224,12 @@ export const es = {
   editVisit: "Corregir",
   deleteVisit: "Borrar",
   confirmDeleteVisit: "¿Borrar esta visita?",
+  development: "Desarrollo",
+  developmentExpected: "Esperable",
+  developmentConsultIf: "Consultar si…",
+  developmentTipsHeading: "Qué mirar",
+  developmentDisclaimer:
+    "Orientación general, no diagnostica. Una señal aislada no define nada: importa el patrón y si pierde habilidades que ya tenía. Ante dudas, hablá con el pediatra.",
 };
 
 export function sideLabel(side: "left" | "right" | "both"): string {
