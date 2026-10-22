@@ -23,6 +23,8 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
   const [inviteSent, setInviteSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   async function loadPeople() {
     const { data, error: loadError } = await client.rpc("list_household_people");
@@ -102,6 +104,31 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
     await loadPeople();
   }
 
+  async function generateCode() {
+    setBusy(true);
+    setError(null);
+    setCodeCopied(false);
+    const { data, error: createError } = await client.rpc("create_invite");
+    setBusy(false);
+    if (createError || typeof data !== "string") {
+      setError(messageForError(createError ?? { message: "" }));
+      trackAttempt("invite_code_created", false, createError);
+      return;
+    }
+    setCode(data);
+    trackAttempt("invite_code_created", true);
+  }
+
+  async function copyCode() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setCodeCopied(true);
+    } catch {
+      setCodeCopied(false);
+    }
+  }
+
   async function leaveHousehold() {
     if (!confirm(es.familyLeaveConfirm)) return;
     setBusy(true);
@@ -163,6 +190,28 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
             </li>
           ))}
         </ul>
+      ) : null}
+      {people ? (
+        <section className="stack">
+          <h2>{es.inviteCodeTitle}</h2>
+          <p className="muted">{es.inviteCodeHelp}</p>
+          {code ? (
+            <p className="stat-line">
+              <strong>{code}</strong>
+            </p>
+          ) : null}
+          <div className="row-actions">
+            <button type="button" disabled={busy} onClick={() => void generateCode()}>
+              {es.inviteCodeGenerate}
+            </button>
+            {code ? (
+              <button type="button" className="ghost" disabled={busy} onClick={() => void copyCode()}>
+                {es.inviteCodeCopy}
+              </button>
+            ) : null}
+          </div>
+          {codeCopied ? <p>{es.inviteCodeCopied}</p> : null}
+        </section>
       ) : null}
       {people && isOwner ? (
         <form className="stack" onSubmit={(event) => void inviteRelative(event)}>

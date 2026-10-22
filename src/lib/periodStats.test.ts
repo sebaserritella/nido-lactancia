@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shiftRange, summarizePeriod } from "./periodStats";
+import { canShiftPeriod, clampPeriodRange, initialPeriodRange, shiftRange, summarizePeriod } from "./periodStats";
 
 const babyId = "22222222-2222-2222-2222-222222222222";
 const zone = "America/Argentina/Buenos_Aires";
@@ -128,5 +128,63 @@ describe("summarizePeriod", () => {
   it("slides the date window by its own length", () => {
     expect(shiftRange("2026-10-01", "2026-10-03", -1)).toEqual({ from: "2026-09-28", to: "2026-09-30" });
     expect(shiftRange("2026-10-01", "2026-10-03", 1)).toEqual({ from: "2026-10-04", to: "2026-10-06" });
+  });
+});
+
+describe("initialPeriodRange", () => {
+  it("returns today for day grain", () => {
+    expect(initialPeriodRange("day", "2026-10-22", "2026-01-01")).toEqual({
+      from: "2026-10-22",
+      to: "2026-10-22",
+    });
+  });
+
+  it("returns Mon–Sun containing today for week grain", () => {
+    // 2026-10-22 is Thursday → week Mon 19 – Sun 25
+    expect(initialPeriodRange("week", "2026-10-22", "2026-01-01")).toEqual({
+      from: "2026-10-19",
+      to: "2026-10-25",
+    });
+  });
+
+  it("returns calendar month for month grain", () => {
+    expect(initialPeriodRange("month", "2026-10-22", "2026-01-01")).toEqual({
+      from: "2026-10-01",
+      to: "2026-10-31",
+    });
+  });
+
+  it("clamps from to bornOn when the natural range starts earlier", () => {
+    expect(initialPeriodRange("month", "2026-10-22", "2026-10-15")).toEqual({
+      from: "2026-10-15",
+      to: "2026-10-31",
+    });
+  });
+
+  it("does not use bornOn when null", () => {
+    expect(initialPeriodRange("week", "2026-10-22", null).from).toBe("2026-10-19");
+  });
+});
+
+describe("clampPeriodRange", () => {
+  it("caps to at today", () => {
+    expect(clampPeriodRange("2026-10-19", "2026-10-25", "2026-01-01", "2026-10-22")).toEqual({
+      from: "2026-10-19",
+      to: "2026-10-22",
+    });
+  });
+});
+
+describe("canShiftPeriod", () => {
+  it("blocks next when shifted window would start after today", () => {
+    expect(canShiftPeriod("2026-10-19", "2026-10-22", 1, "2026-01-01", "2026-10-22")).toBe(false);
+  });
+
+  it("allows previous when shifted window still overlaps bornOn…today", () => {
+    expect(canShiftPeriod("2026-10-19", "2026-10-22", -1, "2026-01-01", "2026-10-22")).toBe(true);
+  });
+
+  it("blocks previous when shifted window would end before bornOn", () => {
+    expect(canShiftPeriod("2026-10-15", "2026-10-22", -1, "2026-10-15", "2026-10-22")).toBe(false);
   });
 });

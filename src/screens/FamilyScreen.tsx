@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LocalBanner } from "../components/LocalBanner";
 import { es } from "../i18n/es";
@@ -12,6 +12,7 @@ type FamilyScreenProps = {
 };
 
 export function FamilyScreen({ client, onSignOut, onReady }: FamilyScreenProps) {
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -26,6 +27,21 @@ export function FamilyScreen({ client, onSignOut, onReady }: FamilyScreenProps) 
       return;
     }
     trackAttempt("family_created", true);
+    onReady();
+  }
+
+  async function joinWithCode(event: FormEvent) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    const { error: joinError } = await client.rpc("join_household", { p_code: code.trim() });
+    setPending(false);
+    if (joinError) {
+      setError(messageForError(joinError));
+      trackAttempt("household_joined", false, joinError);
+      return;
+    }
+    trackAttempt("household_joined", true);
     onReady();
   }
 
@@ -49,6 +65,22 @@ export function FamilyScreen({ client, onSignOut, onReady }: FamilyScreenProps) 
         <button type="button" disabled={pending} onClick={() => void createFamily()}>
           {es.createFamily}
         </button>
+        <form className="stack" noValidate onSubmit={joinWithCode}>
+          <p className="muted">{es.joinWithCode}</p>
+          <label>
+            {es.joinCodeLabel}
+            <input
+              type="text"
+              autoComplete="off"
+              autoCapitalize="characters"
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={code.trim() === "" || pending}>
+            {es.joinCodeSubmit}
+          </button>
+        </form>
         {error ? <p className="error">{error}</p> : null}
       </section>
     </main>

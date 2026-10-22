@@ -57,6 +57,21 @@ describe("buildAnalyticsEvent", () => {
       buildAnalyticsEvent("save_failed", { action: "feeds_grouped", reason: "conflict" }),
     ).toEqual({ name: "save_failed", params: { action: "feeds_grouped", reason: "conflict" } });
   });
+
+  it("keeps result for invite code and join events", () => {
+    for (const name of ["invite_code_created", "household_joined"] as const) {
+      expect(buildAnalyticsEvent(name, { result: "ok" })).toEqual({
+        name,
+        params: { result: "ok" },
+      });
+    }
+    expect(
+      buildAnalyticsEvent("save_failed", { action: "invite_code_created", reason: "unavailable" }),
+    ).toEqual({
+      name: "save_failed",
+      params: { action: "invite_code_created", reason: "unavailable" },
+    });
+  });
 });
 
 describe("failureReason", () => {

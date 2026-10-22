@@ -13,6 +13,14 @@ import { bottleDaily } from "../lib/computeRangeStats";
 import { assignSessionId, type DismissedPair } from "../lib/feedSessions";
 import { trackAttempt } from "../lib/analytics";
 import { messageForError } from "../lib/errors";
+import {
+  canShiftPeriod,
+  clampPeriodRange,
+  initialPeriodRange,
+  shiftRange,
+  summarizePeriod,
+  type StatGrain,
+} from "../lib/periodStats";
 
 type HistoryPanelProps = {
   client: SupabaseClient;
@@ -33,6 +41,41 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
   const [selectedDay, setSelectedDay] = useState(today);
   const [tick, setTick] = useState(0);
   const dayCard = useRef<HTMLElement>(null);
+  const [grain, setGrain] = useState<StatGrain>("week");
+  const [periodFrom, setPeriodFrom] = useState(() => {
+    const next = initialPeriodRange("week", today, baby.born_on);
+    return clampPeriodRange(next.from, next.to, baby.born_on, today).from;
+  });
+  const [periodTo, setPeriodTo] = useState(() => {
+    const next = initialPeriodRange("week", today, baby.born_on);
+    return clampPeriodRange(next.from, next.to, baby.born_on, today).to;
+  });
+
+  useEffect(() => {
+    const next = initialPeriodRange(grain, today, baby.born_on);
+    const clamped = clampPeriodRange(next.from, next.to, baby.born_on, today);
+    setPeriodFrom(clamped.from);
+    setPeriodTo(clamped.to);
+  }, [grain, baby.id, baby.born_on, today]);
+
+  const periodStats = summarizePeriod(feeds, diapers, baby.id, periodFrom, periodTo, timeZone, grain);
+
+  const minutesLabel =
+    grain === "day" ? es.minutesPerDay : grain === "week" ? es.minutesPerWeek : es.minutesPerMonth;
+  const diapersLabel =
+    grain === "day" ? es.diapersPerDay : grain === "week" ? es.diapersPerWeek : es.diapersPerMonth;
+
+  function changeGrain(next: StatGrain) {
+    setGrain(next);
+  }
+
+  function shift(direction: -1 | 1) {
+    if (!canShiftPeriod(periodFrom, periodTo, direction, baby.born_on, today)) return;
+    const shifted = shiftRange(periodFrom, periodTo, direction);
+    const clamped = clampPeriodRange(shifted.from, shifted.to, baby.born_on, today);
+    setPeriodFrom(clamped.from);
+    setPeriodTo(clamped.to);
+  }
 
   useEffect(() => {
     let ignore = false;
@@ -168,6 +211,68 @@ export function HistoryPanel({ client, baby, timeZone }: HistoryPanelProps) {
     <div className="stack">
       <p className="muted">{baby.born_on && baby.born_on <= today ? es.historySpan : es.historyNeedsBirth}</p>
       {error ? <p className="error">{error}</p> : null}
+      <section className="card stack">
+        <h2>{es.periodSection}</h2>
+        <div className="row-actions" role="group" aria-label={es.grain}>
+          {(["day", "week", "month"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              className={grain === value ? undefined : "ghost"}
+              aria-pressed={grain === value}
+              onClick={() => changeGrain(value)}
+            >
+              {value === "day" ? es.grainDay : value === "week" ? es.grainWeek : es.grainMonth}
+            </button>
+          ))}
+        </div>
+        <div className="day-picker">
+          <button
+            type="button"
+            className="ghost"
+            aria-label={es.previousPeriod}
+            disabled={!canShiftPeriod(periodFrom, periodTo, -1, baby.born_on, today)}
+            onClick={() => shift(-1)}
+          >
+            ‹
+          </button>
+          <p className="muted">
+            {periodFrom === periodTo ? periodFrom : `${periodFrom} → ${periodTo}`}
+          </p>
+          <button
+            type="button"
+            className="ghost"
+            aria-label={es.nextPeriod}
+            disabled={!canShiftPeriod(periodFrom, periodTo, 1, baby.born_on, today)}
+            onClick={() => shift(1)}
+          >
+            ›
+          </button>
+        </div>
+        {periodStats.feedPeriodCount === 0 && periodStats.diaperPeriodCount === 0 ? (
+          <p className="muted">{es.emptyRange}</p>
+        ) : (
+          <>
+            <Stat label={minutesLabel} value={formatMinutes(periodStats.minutesPerPeriod)} />
+            <Stat label={diapersLabel} value={formatStat(periodStats.diapersPerPeriod)} />
+            {periodStats.sidePortions.map((portion) => (
+              <Stat
+                key={portion.key}
+                label={portion.key === "left" ? es.left : es.right}
+                value={formatMinutes(portion.perPeriod)}
+              />
+            ))}
+            {periodStats.diaperPortions.map((portion) => (
+              <Stat
+                key={portion.key}
+                label={portion.key === "pee" ? es.pee : es.poop}
+                value={formatStat(portion.perPeriod)}
+              />
+            ))}
+          </>
+        )}
+        <p className="muted">{es.periodNote}</p>
+      </section>
       {stats ? (
         <section className="card stats">
           <Stat label={es.feedsPerDay} value={formatStat(stats.feeds_per_day)} />

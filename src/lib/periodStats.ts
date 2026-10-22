@@ -36,7 +36,7 @@ type FeedPoint = {
   ended_at: string | null;
   paused_ms?: number | null;
   paused_at?: string | null;
-  side: FeedSide;
+  side: FeedSide | null;
 };
 
 type DiaperPoint = {
@@ -104,7 +104,64 @@ export function shiftRange(from: string, to: string, direction: -1 | 1): { from:
   return { from: addCalendarDays(from, delta), to: addCalendarDays(to, delta) };
 }
 
-function addSideMinutes(totals: Map<"left" | "right", number>, side: FeedSide, minutes: number) {
+export function clampPeriodRange(
+  from: string,
+  to: string,
+  bornOn: string | null,
+  today: string,
+): { from: string; to: string } {
+  let start = from;
+  let end = to;
+  if (end > today) end = today;
+  if (bornOn && start < bornOn) start = bornOn;
+  if (start > end) start = end;
+  return { from: start, to: end };
+}
+
+export function initialPeriodRange(
+  grain: StatGrain,
+  today: string,
+  bornOn: string | null,
+): { from: string; to: string } {
+  let from: string;
+  let to: string;
+  if (grain === "day") {
+    from = today;
+    to = today;
+  } else if (grain === "week") {
+    from = weekStartMonday(today);
+    to = addCalendarDays(from, 6);
+  } else {
+    from = `${today.slice(0, 7)}-01`;
+    const [year, month] = today.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    to = `${today.slice(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+  }
+  if (bornOn && from < bornOn) from = bornOn;
+  if (from > to) from = to;
+  return { from, to };
+}
+
+export function canShiftPeriod(
+  from: string,
+  to: string,
+  direction: -1 | 1,
+  bornOn: string | null,
+  today: string,
+): boolean {
+  const shifted = shiftRange(from, to, direction);
+  const clamped = clampPeriodRange(shifted.from, shifted.to, bornOn, today);
+  if (direction === 1 && shifted.from > today) return false;
+  if (direction === -1 && bornOn && shifted.to < bornOn) return false;
+  // Reject no-ops where clamp collapses the window away from the shift intent
+  if (clamped.from === from && clamped.to === to && (shifted.from !== from || shifted.to !== to)) {
+    return false;
+  }
+  return clamped.from <= clamped.to;
+}
+
+function addSideMinutes(totals: Map<"left" | "right", number>, side: FeedSide | null, minutes: number) {
+  if (side === null) return;
   if (side === "left" || side === "both") totals.set("left", (totals.get("left") ?? 0) + minutes);
   if (side === "right" || side === "both") totals.set("right", (totals.get("right") ?? 0) + minutes);
 }
@@ -125,9 +182,7 @@ function portions<Key extends Portion["key"]>(order: readonly Key[], totals: Map
     });
 }
 
-function periodKey(localDate: string, grain: StatGrain): string {
-  if (grain === "day") return localDate;
-  if (grain === "month") return localDate.slice(0, 7);
+function weekStartMonday(localDate: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate);
   if (!match) {
     throw new Error("invalid date");
@@ -137,6 +192,12 @@ function periodKey(localDate: string, grain: StatGrain): string {
   const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
   utc.setUTCDate(utc.getUTCDate() + mondayOffset);
   return utc.toISOString().slice(0, 10);
+}
+
+function periodKey(localDate: string, grain: StatGrain): string {
+  if (grain === "day") return localDate;
+  if (grain === "month") return localDate.slice(0, 7);
+  return weekStartMonday(localDate);
 }
 
 function buildBuckets(
