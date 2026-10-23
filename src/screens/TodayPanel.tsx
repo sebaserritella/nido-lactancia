@@ -9,7 +9,7 @@ import { diaperLabel, es, sideLabel } from "../i18n/es";
 import type { Diaper, DiaperKind, Feed, FeedKind, FeedSide } from "../domain";
 import { messageForError } from "../lib/errors";
 import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
-import { activeElapsedMs, activeMinutes, closePause } from "../lib/feedDuration";
+import { activeElapsedMs, activeMinutes, beginPause, closePause, endPause } from "../lib/feedDuration";
 import {
   bottleSavedNotice,
   breastSavedNotice,
@@ -54,6 +54,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   const [bottleReady, setBottleReady] = useState(false);
   const [bottleBackfill, setBottleBackfill] = useState(false);
   const [bottleWhen, setBottleWhen] = useState("");
+  const [clockBusy, setClockBusy] = useState(false);
 
   const open = feeds.find((feed) => feed.ended_at === null) ?? null;
 
@@ -61,7 +62,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
     if (!open) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [open]);
+  }, [open?.id]);
 
   useEffect(() => {
     let ignore = false;
@@ -148,36 +149,52 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
   }
 
   async function pauseFeed() {
-    if (!open || open.paused_at) return;
-    const saved = await run(() => client.from("feeds").update({ paused_at: new Date().toISOString() }).eq("id", open.id));
+    if (!open || open.paused_at || clockBusy) return;
+    const pausedAt = new Date().toISOString();
+    const paused = beginPause(open, pausedAt);
+    if (!paused) return;
+    const feedId = open.id;
+    setClockBusy(true);
+    setFeeds((rows) => rows.map((feed) => (feed.id === feedId ? { ...feed, ...paused } : feed)));
+    const saved = await run(() => client.from("feeds").update({ paused_at: pausedAt }).eq("id", feedId));
     trackAttempt("feed_paused", saved.ok, saved.error);
+    if (!saved.ok) setTick((value) => value + 1);
+    setClockBusy(false);
   }
 
   async function resumeFeed() {
-    if (!open?.paused_at) return;
-    const now = Date.now();
-    const saved = await run(() => client.from("feeds").update(closePause(open, now)).eq("id", open.id));
+    if (!open?.paused_at || clockBusy) return;
+    const resumeAt = Date.now();
+    const resumed = endPause(open, resumeAt);
+    if (!resumed) return;
+    const feedId = open.id;
+    const closed = closePause(open, resumeAt);
+    setClockBusy(true);
+    setFeeds((rows) => rows.map((feed) => (feed.id === feedId ? { ...feed, ...resumed } : feed)));
+    const saved = await run(() => client.from("feeds").update(closed).eq("id", feedId));
     trackAttempt("feed_resumed", saved.ok, saved.error);
+    if (!saved.ok) setTick((value) => value + 1);
+    setClockBusy(false);
   }
 
   async function stopFeed() {
-    if (!open) return;
+    if (!open || clockBusy) return;
     const stopNow = Date.now();
     const endedAt = new Date(stopNow).toISOString();
     const closed = closePause(open, stopNow);
-    const saved = await run(
-      () => client.from("feeds").update({ ...closed, ended_at: endedAt }).eq("id", open.id),
-      () =>
-        breastSavedNotice({
-          side: open.side ?? "both",
-          startedAtIso: open.started_at,
-          endedAtIso: endedAt,
-          minutes: activeMinutes({ ...open, ...closed, ended_at: endedAt }, stopNow),
-          updated: false,
-          timeZone,
-        }),
-    );
+    const feedId = open.id;
+    const notice = breastSavedNotice({
+      side: open.side ?? "both",
+      startedAtIso: open.started_at,
+      endedAtIso: endedAt,
+      minutes: activeMinutes({ ...open, ...closed, ended_at: endedAt }, stopNow),
+      updated: false,
+      timeZone,
+    });
+    setClockBusy(true);
+    const saved = await run(() => client.from("feeds").update({ ...closed, ended_at: endedAt }).eq("id", feedId), () => notice);
     trackAttempt("feed_stopped", saved.ok, saved.error);
+    setClockBusy(false);
   }
 
   async function logDiaper(kind: DiaperKind) {
@@ -451,15 +468,15 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                 </p>
                 <div className="choice">
                   {open.paused_at ? (
-                    <button type="button" onClick={resumeFeed}>
+                    <button type="button" disabled={clockBusy} onClick={resumeFeed}>
                       {es.resume}
                     </button>
                   ) : (
-                    <button type="button" className="ghost" onClick={pauseFeed}>
+                    <button type="button" className="ghost" disabled={clockBusy} onClick={pauseFeed}>
                       {es.pause}
                     </button>
                   )}
-                  <button type="button" onClick={stopFeed}>
+                  <button type="button" disabled={clockBusy} onClick={stopFeed}>
                     {es.ended}
                   </button>
                 </div>

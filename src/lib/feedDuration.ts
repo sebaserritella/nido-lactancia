@@ -25,3 +25,15 @@ export function closePause(feed: FeedClock, now = Date.now()): { paused_ms: numb
   const extra = feed.paused_at ? Math.max(0, now - new Date(feed.paused_at).getTime()) : 0;
   return { paused_ms: (feed.paused_ms ?? 0) + extra, paused_at: null };
 }
+
+/** Optimistic pause: stamp paused_at locally so the timer freezes before the write returns. */
+export function beginPause<T extends FeedClock>(feed: T, pausedAt: string): T | null {
+  if (feed.ended_at != null || feed.paused_at) return null;
+  return { ...feed, paused_at: pausedAt };
+}
+
+/** Optimistic resume: fold the open pause into paused_ms and clear paused_at. */
+export function endPause<T extends FeedClock>(feed: T, now = Date.now()): T | null {
+  if (feed.ended_at != null || !feed.paused_at) return null;
+  return { ...feed, ...closePause(feed, now) };
+}
