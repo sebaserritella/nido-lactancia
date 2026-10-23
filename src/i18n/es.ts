@@ -196,6 +196,8 @@ export const es = {
   familyMakeOwnerConfirm: "¿Pasarle la creación de la familia a esta persona? Vos vas a pasar a ser miembro.",
   familyCancelInvite: "Cancelar",
   familyCancelInviteConfirm: "¿Cancelar esta invitación?",
+  familyReportIssue: "Reportar un problema",
+  reportIssuePrompt: "Describí qué pasó:",
   familyTabFicha: "Ficha",
   notHouseholdOwner: "Solo quien creó la familia puede hacer eso.",
   ownerCannotLeave: "Quien creó la familia no puede salir. Pedile a alguien que te quite si hace falta.",

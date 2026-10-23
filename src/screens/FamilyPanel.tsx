@@ -4,6 +4,7 @@ import { es } from "../i18n/es";
 import { trackAttempt, trackRejected } from "../lib/analytics";
 import { normalizeEmail } from "../lib/email";
 import { messageForError } from "../lib/errors";
+import { buildReportMailto } from "../lib/reportIssue";
 
 type FamilyPanelProps = {
   client: SupabaseClient;
@@ -129,6 +130,17 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
     }
   }
 
+  async function reportIssue() {
+    const { data } = await client.auth.getUser();
+    const href = buildReportMailto({
+      href: window.location.href,
+      userAgent: navigator.userAgent,
+      userEmail: data.user?.email ?? null,
+      prompt: es.reportIssuePrompt,
+    });
+    window.location.href = href;
+  }
+
   async function leaveHousehold() {
     if (!confirm(es.familyLeaveConfirm)) return;
     setBusy(true);
@@ -243,6 +255,11 @@ export function FamilyPanel({ client, onLeftHousehold, onClose }: FamilyPanelPro
           </button>
         </>
       ) : null}
+      <div className="stack">
+        <button type="button" className="ghost" onClick={() => void reportIssue()}>
+          {es.familyReportIssue}
+        </button>
+      </div>
       {inviteSent ? <p>{es.inviteSent}</p> : null}
       {error ? <p className="error">{error}</p> : null}
     </section>
