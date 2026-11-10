@@ -650,6 +650,7 @@ class Query {
       if (this.table === "babies" && row.pediatrician_name === undefined) row.pediatrician_name = null;
       if (this.table === "babies" && row.pediatrician_phone === undefined) row.pediatrician_phone = null;
       if (this.table === "babies" && row.blood_type === undefined) row.blood_type = null;
+      if (this.table === "babies" && row.sex === undefined) row.sex = null;
       if (this.table === "babies" && row.allergies === undefined) row.allergies = null;
       if (this.table === "babies" && row.health_insurance === undefined) row.health_insurance = null;
       if (this.table === "babies" && row.health_insurance_card === undefined) row.health_insurance_card = null;

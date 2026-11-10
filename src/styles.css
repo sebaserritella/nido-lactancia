@@ -12,7 +12,7 @@ body {
   margin: 0;
 }
 
-button, input {
+button, input, select {
   font: inherit;
 }
 
@@ -39,7 +39,8 @@ button.selected {
 
 button:disabled { opacity: 0.5; }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 48px;
   margin-top: 6px;
@@ -567,4 +568,21 @@ button.day-jump.selected {
 .success-dialog .success-lines p {
   margin: 0;
   color: #6e625a;
+}
+
+.growth-chart {
+  display: grid;
+  gap: 4px;
+}
+
+.growth-chart h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.growth-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
 }

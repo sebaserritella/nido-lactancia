@@ -7,6 +7,7 @@ export type Baby = {
   household_id: string;
   name: string;
   born_on: string | null;
+  sex?: "female" | "male" | null;
   pediatrician_name: string | null;
   pediatrician_phone: string | null;
   blood_type: string | null;

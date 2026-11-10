@@ -12,7 +12,7 @@ import { VaccinesSection } from "./VaccinesSection";
 import { VisitsSection } from "./VisitsSection";
 
 const babyColumns =
-  "id, household_id, name, born_on, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
+  "id, household_id, name, born_on, sex, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
 
 type FichaPanelProps = {
   client: SupabaseClient;
@@ -37,6 +37,7 @@ function normalizeBaby(row: Baby): Baby {
     born_on: row.born_on ?? null,
     pediatrician_name: row.pediatrician_name ?? null,
     pediatrician_phone: row.pediatrician_phone ?? null,
+    sex: row.sex ?? null,
     blood_type: row.blood_type ?? null,
     allergies: row.allergies ?? null,
     health_insurance: row.health_insurance ?? null,
@@ -64,6 +65,7 @@ export function FichaPanel({
   const [editPediatrician, setEditPediatrician] = useState("");
   const [editPediatricianPhone, setEditPediatricianPhone] = useState("");
   const [editBloodType, setEditBloodType] = useState("");
+  const [editSex, setEditSex] = useState<"" | "female" | "male">("");
   const [editAllergies, setEditAllergies] = useState("");
   const [editHealthInsurance, setEditHealthInsurance] = useState("");
   const [editHealthInsuranceCard, setEditHealthInsuranceCard] = useState("");
@@ -81,6 +83,7 @@ export function FichaPanel({
     setEditPediatrician(baby.pediatrician_name ?? "");
     setEditPediatricianPhone(baby.pediatrician_phone ?? "");
     setEditBloodType(baby.blood_type ?? "");
+    setEditSex(baby.sex ?? "");
     setEditAllergies(baby.allergies ?? "");
     setEditHealthInsurance(baby.health_insurance ?? "");
     setEditHealthInsuranceCard(baby.health_insurance_card ?? "");
@@ -145,6 +148,7 @@ export function FichaPanel({
     const nextProfile = {
       name: trimmed,
       born_on: nextBorn,
+      sex: editSex === "" ? null : editSex,
       pediatrician_name: emptyToNull(editPediatrician),
       pediatrician_phone: emptyToNull(editPediatricianPhone),
       blood_type: emptyToNull(editBloodType),
@@ -185,6 +189,11 @@ export function FichaPanel({
             <div>
               <strong>{selected.name}</strong>
               {selected.born_on ? <p className="muted">{formatCalendarDate(selected.born_on)}</p> : null}
+              {selected.sex ? (
+                <p className="muted">
+                  <strong>{es.sex}</strong>: {selected.sex === "female" ? es.sexFemale : es.sexMale}
+                </p>
+              ) : null}
               {selected.pediatrician_name ? (
                 <p className="muted">
                   <strong>{es.pediatrician}</strong>: {selected.pediatrician_name}
@@ -242,6 +251,14 @@ export function FichaPanel({
                 value={editBornOn}
                 onChange={(event) => setEditBornOn(event.target.value)}
               />
+            </label>
+            <label>
+              {es.sex}
+              <select value={editSex} onChange={(event) => setEditSex(event.target.value as "" | "female" | "male")}>
+                <option value="">{es.sexUnset}</option>
+                <option value="female">{es.sexFemale}</option>
+                <option value="male">{es.sexMale}</option>
+              </select>
             </label>
             <label>
               {es.pediatrician}

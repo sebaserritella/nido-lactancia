@@ -16,7 +16,7 @@ import { TodayPanel } from "./TodayPanel";
 
 const babyStorageKey = "nido-lactancia.babyId";
 const babyColumns =
-  "id, household_id, name, born_on, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
+  "id, household_id, name, born_on, sex, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
 
 function normalizeBaby(row: Baby): Baby {
   return {
@@ -24,6 +24,7 @@ function normalizeBaby(row: Baby): Baby {
     born_on: row.born_on ?? null,
     pediatrician_name: row.pediatrician_name ?? null,
     pediatrician_phone: row.pediatrician_phone ?? null,
+    sex: row.sex ?? null,
     blood_type: row.blood_type ?? null,
     allergies: row.allergies ?? null,
     health_insurance: row.health_insurance ?? null,
@@ -82,6 +83,7 @@ export function TrackerScreen({
           normalizeBaby({
             ...baby,
             born_on: null,
+            sex: null,
             pediatrician_name: null,
             pediatrician_phone: null,
             blood_type: null,
@@ -89,7 +91,7 @@ export function TrackerScreen({
             health_insurance: null,
             health_insurance_card: null,
           }),
-        );
+        ) as typeof data;
         loadError = retry.error;
       }
       if (ignore) return;

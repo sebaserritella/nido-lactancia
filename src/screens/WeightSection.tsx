@@ -8,6 +8,8 @@ import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
 import { centimetersToMillimeters, formatCentimeters } from "../lib/length";
 import { todayLocalDate } from "../lib/localTime";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
+import { formatPercentile, growthPercentile } from "../lib/growth";
+import { GrowthChart } from "../components/GrowthChart";
 
 type WeightSectionProps = {
   client: SupabaseClient;
@@ -153,6 +155,25 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
       ) : null}
       {error ? <p className="error">{error}</p> : null}
       {weights.length === 0 ? <p className="muted">{es.noWeights}</p> : null}
+      {weights.length > 0 && !baby.born_on ? <p className="muted">{es.percentilesNeedBirth}</p> : null}
+      {weights.length > 0 && baby.born_on && !baby.sex ? <p className="muted">{es.percentilesNeedSex}</p> : null}
+      {weights.length > 0 && baby.born_on && baby.sex ? (
+        <>
+          <GrowthChart
+            kind="weight"
+            sex={baby.sex}
+            bornOn={baby.born_on}
+            points={weights.filter((weight) => weight.grams != null).map((weight) => ({ measuredOn: weight.weighed_on, value: weight.grams! / 1000 }))}
+          />
+          <GrowthChart
+            kind="length"
+            sex={baby.sex}
+            bornOn={baby.born_on}
+            points={weights.filter((weight) => weight.length_mm != null).map((weight) => ({ measuredOn: weight.weighed_on, value: weight.length_mm! / 10 }))}
+          />
+          <p className="muted">{es.growthNote}</p>
+        </>
+      ) : null}
       {weights.length > 0 ? (
         <ul className="entries plain">
           {weights.map((weight) => (
@@ -161,8 +182,12 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
                 <strong>{formatCalendarDate(weight.weighed_on)}</strong>
                 <span>
                   {[
-                    weight.grams != null ? `${formatKilograms(weight.grams)} ${es.kg}` : null,
-                    weight.length_mm != null ? `${formatCentimeters(weight.length_mm)} ${es.cm}` : null,
+                    weight.grams != null
+                      ? withPercentile(`${formatKilograms(weight.grams)} ${es.kg}`, growthPercentile("weight", baby.sex, baby.born_on, weight.weighed_on, weight.grams / 1000))
+                      : null,
+                    weight.length_mm != null
+                      ? withPercentile(`${formatCentimeters(weight.length_mm)} ${es.cm}`, growthPercentile("length", baby.sex, baby.born_on, weight.weighed_on, weight.length_mm / 10))
+                      : null,
                   ]
                     .filter(Boolean)
                     .join(" · ")}
@@ -246,4 +271,8 @@ function WeightForm({
       </button>
     </form>
   );
+}
+
+function withPercentile(label: string, percentile: number | null): string {
+  return percentile === null ? label : `${label} (${formatPercentile(percentile)})`;
 }
