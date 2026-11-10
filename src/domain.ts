@@ -93,6 +93,7 @@ export type PediatricVisit = {
   baby_id: string;
   visited_on: string;
   reason: string;
+  provider: string | null;
   notes: string | null;
   grams: number | null;
   length_mm: number | null;

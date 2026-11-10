@@ -9,7 +9,7 @@ import { todayLocalDate } from "../lib/localTime";
 import { isFutureDate } from "../lib/vaccines";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
 
-const visitColumns = "id, baby_id, visited_on, reason, notes, grams, length_mm";
+const visitColumns = "id, baby_id, visited_on, reason, provider, notes, grams, length_mm";
 
 type VisitsSectionProps = {
   client: SupabaseClient;
@@ -59,6 +59,7 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
   async function save(
     visitedOn: string,
     reasonText: string,
+    providerText: string,
     kgText: string,
     cmText: string,
     notesText: string,
@@ -96,12 +97,15 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
       }
     }
 
+    const providerTrimmed = providerText.trim();
+    const provider = providerTrimmed === "" ? null : providerTrimmed;
     const notesTrimmed = notesText.trim();
     const notes = notesTrimmed === "" ? null : notesTrimmed;
     const payload = {
       baby_id: baby.id,
       visited_on: visitedOn,
       reason,
+      provider,
       notes,
       grams,
       length_mm: lengthMm,
@@ -176,11 +180,12 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
           today={today}
           initialDate={today}
           initialReason=""
+          initialProvider=""
           initialKg=""
           initialCm=""
           initialNotes=""
           onCancel={() => setAdding(false)}
-          onSave={(date, reason, kg, cm, notes) => save(date, reason, kg, cm, notes)}
+          onSave={(date, reason, provider, kg, cm, notes) => save(date, reason, provider, kg, cm, notes)}
         />
       ) : null}
       {error ? <p className="error">{error}</p> : null}
@@ -192,6 +197,7 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
               <div className="entry-copy weight-meta">
                 <strong>{formatCalendarDate(visit.visited_on)}</strong>
                 <span>{visit.reason}</span>
+                {visit.provider ? <span className="muted">{visit.provider}</span> : null}
                 {visitMeta(visit) ? <span className="muted">{visitMeta(visit)}</span> : null}
               </div>
               <div className="row-actions">
@@ -214,11 +220,12 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
                   today={today}
                   initialDate={visit.visited_on}
                   initialReason={visit.reason}
+                  initialProvider={visit.provider ?? ""}
                   initialKg={visit.grams != null ? formatKilograms(visit.grams) : ""}
                   initialCm={visit.length_mm != null ? formatCentimeters(visit.length_mm) : ""}
                   initialNotes={visit.notes ?? ""}
                   onCancel={() => setEditingId(null)}
-                  onSave={(date, reason, kg, cm, notes) => save(date, reason, kg, cm, notes, visit.id)}
+                  onSave={(date, reason, provider, kg, cm, notes) => save(date, reason, provider, kg, cm, notes, visit.id)}
                 />
               ) : null}
             </li>
@@ -241,6 +248,7 @@ function VisitForm({
   today,
   initialDate,
   initialReason,
+  initialProvider,
   initialKg,
   initialCm,
   initialNotes,
@@ -250,14 +258,16 @@ function VisitForm({
   today: string;
   initialDate: string;
   initialReason: string;
+  initialProvider: string;
   initialKg: string;
   initialCm: string;
   initialNotes: string;
   onCancel: () => void;
-  onSave: (date: string, reason: string, kg: string, cm: string, notes: string) => void | Promise<void>;
+  onSave: (date: string, reason: string, provider: string, kg: string, cm: string, notes: string) => void | Promise<void>;
 }) {
   const [date, setDate] = useState(initialDate);
   const [reason, setReason] = useState(initialReason);
+  const [provider, setProvider] = useState(initialProvider);
   const [kg, setKg] = useState(initialKg);
   const [cm, setCm] = useState(initialCm);
   const [notes, setNotes] = useState(initialNotes);
@@ -268,7 +278,7 @@ function VisitForm({
     if (saving) return;
     setSaving(true);
     try {
-      await onSave(date, reason, kg, cm, notes);
+      await onSave(date, reason, provider, kg, cm, notes);
     } finally {
       setSaving(false);
     }
@@ -294,6 +304,15 @@ function VisitForm({
           value={reason}
           disabled={saving}
           onChange={(event) => setReason(event.target.value)}
+        />
+      </label>
+      <label>
+        {es.visitProvider} <span className="muted">{es.vaccineOptional}</span>
+        <input
+          placeholder="Otorrino · Hospital X"
+          value={provider}
+          disabled={saving}
+          onChange={(event) => setProvider(event.target.value)}
         />
       </label>
       <label>
