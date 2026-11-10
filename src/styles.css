@@ -818,3 +818,12 @@ input:focus-visible, select:focus-visible, button:focus-visible {
   border: 1px solid var(--line-strong);
   font-weight: 500;
 }
+
+.entries.plain > li { border-radius: 0; }
+
+.entries.plain.vaccine-list > li {
+  border-top: 0;
+  padding: 4px 0;
+}
+
+.chip { white-space: nowrap; }

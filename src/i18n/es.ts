@@ -132,6 +132,7 @@ export const es = {
   noDiapersYet: "Todavía no hay pañales.",
   yesterday: "ayer",
   dayBeforeYesterday: "anteayer",
+  agoPrefix: "Hace",
   agoLessThanMinute: "Hace menos de 1 minuto",
   agoMinutes: (minutes: number) => (minutes === 1 ? "Hace 1 minuto" : `Hace ${minutes} minutos`),
   agoHours: (hours: number, minutes: number) => {

@@ -4,7 +4,7 @@ import { DiaperIcon, FeedIcon } from "./EventIcons";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
 import { formatMinutes } from "../lib/format";
-import { formatLatestStamp } from "../lib/latestStamp";
+import { formatLatestShort as formatLatestStamp } from "../lib/latestStamp";
 import { activeMinutes } from "../lib/feedDuration";
 import { latestToma, nextSide as nextSideFrom } from "../lib/latestToma";
 import { readResume, rememberLatest, type CachedDiaper, type CachedFeed } from "../lib/resume";

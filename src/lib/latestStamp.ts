@@ -52,3 +52,15 @@ export function formatLatestFeedLine(
   const minutes = formatMinutes(activeMinutes({ started_at: startedAt, ended_at: endedAt, paused_ms: pausedMs }));
   return minutes ? `${when} · ${minutes}` : when;
 }
+
+/** Short relative time for a headline: "Hace 49 min", "Hace 1 h 5 min". Calendar stamp from 24 hours on. */
+export function formatLatestShort(isoUtc: string, timeZone: string, now = new Date()): string {
+  const elapsedMs = now.getTime() - new Date(isoUtc).getTime();
+  if (elapsedMs >= DAY_MS) return formatCalendarStamp(isoUtc, timeZone, now);
+  const totalMinutes = Math.floor(Math.max(0, elapsedMs) / 60_000);
+  if (totalMinutes < 1) return es.agoLessThanMinute;
+  if (totalMinutes < 60) return `${es.agoPrefix} ${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes === 0 ? `${es.agoPrefix} ${hours} h` : `${es.agoPrefix} ${hours} h ${minutes} min`;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatLatestFeedLine, formatLatestStamp } from "./latestStamp";
+import { formatLatestFeedLine, formatLatestShort, formatLatestStamp } from "./latestStamp";
 
 const BUENOS_AIRES = "America/Argentina/Buenos_Aires";
 
@@ -42,5 +42,15 @@ describe("latest stamp", () => {
 
   it("marks an open feed as in progress without a hace label", () => {
     expect(formatLatestFeedLine("2026-10-04T15:05:00.000Z", null, BUENOS_AIRES, "En curso", now)).toBe("En curso");
+  });
+});
+
+describe("short latest stamp", () => {
+  const now = new Date("2026-10-04T18:00:00.000Z");
+  it("uses h and min", () => {
+    expect(formatLatestShort("2026-10-04T17:11:00.000Z", BUENOS_AIRES, now)).toBe("Hace 49 min");
+    expect(formatLatestShort("2026-10-04T16:55:00.000Z", BUENOS_AIRES, now)).toBe("Hace 1 h 5 min");
+    expect(formatLatestShort("2026-10-04T16:00:00.000Z", BUENOS_AIRES, now)).toBe("Hace 2 h");
+    expect(formatLatestShort("2026-10-03T18:00:00.000Z", BUENOS_AIRES, now)).toBe("ayer 15:00");
   });
 });
