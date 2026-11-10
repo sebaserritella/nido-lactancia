@@ -217,6 +217,7 @@ function normalizeBaby(value: unknown): Baby | null {
     pediatrician_name: typeof baby.pediatrician_name === "string" ? baby.pediatrician_name : null,
     pediatrician_phone: typeof baby.pediatrician_phone === "string" ? baby.pediatrician_phone : null,
     ...(baby.sex === "female" || baby.sex === "male" ? { sex: baby.sex } : {}),
+    ...(typeof baby.gestational_days === "number" ? { gestational_days: baby.gestational_days } : {}),
     blood_type: typeof baby.blood_type === "string" ? baby.blood_type : null,
     allergies: typeof baby.allergies === "string" ? baby.allergies : null,
     health_insurance: typeof baby.health_insurance === "string" ? baby.health_insurance : null,

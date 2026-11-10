@@ -8,7 +8,7 @@ import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
 import { centimetersToMillimeters, formatCentimeters } from "../lib/length";
 import { todayLocalDate } from "../lib/localTime";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
-import { formatPercentile, growthPercentile } from "../lib/growth";
+import { formatGestation, formatPercentile, growthAgeDays, growthPercentile, termDays, usesCorrectedAge } from "../lib/growth";
 import { GrowthChart } from "../components/GrowthChart";
 
 type WeightSectionProps = {
@@ -163,14 +163,28 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
             kind="weight"
             sex={baby.sex}
             bornOn={baby.born_on}
+            gestationalDays={baby.gestational_days}
             points={weights.filter((weight) => weight.grams != null).map((weight) => ({ measuredOn: weight.weighed_on, value: weight.grams! / 1000 }))}
           />
           <GrowthChart
             kind="length"
             sex={baby.sex}
             bornOn={baby.born_on}
+            gestationalDays={baby.gestational_days}
             points={weights.filter((weight) => weight.length_mm != null).map((weight) => ({ measuredOn: weight.weighed_on, value: weight.length_mm! / 10 }))}
           />
+          {usesCorrectedAge(baby.gestational_days) ? (
+            <p className="item-note">
+              {es.correctedAgeNote(
+                formatGestation(baby.gestational_days),
+                es.missingWeeksDays(Math.floor((termDays - baby.gestational_days) / 7), (termDays - baby.gestational_days) % 7),
+              )}
+            </p>
+          ) : null}
+          {usesCorrectedAge(baby.gestational_days) &&
+          weights.some((weight) => growthAgeDays(baby.born_on!, weight.weighed_on, baby.gestational_days) < 0) ? (
+            <p className="item-note">{es.beforeTermNote}</p>
+          ) : null}
           <p className="item-note">{es.growthNote}</p>
         </>
       ) : null}
@@ -184,10 +198,10 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
                 <div className="chips">
                   {[
                     weight.grams != null
-                      ? withPercentile(`${formatKilograms(weight.grams)} ${es.kg}`, growthPercentile("weight", baby.sex, baby.born_on, weight.weighed_on, weight.grams / 1000))
+                      ? withPercentile(`${formatKilograms(weight.grams)} ${es.kg}`, growthPercentile("weight", baby.sex, baby.born_on, weight.weighed_on, weight.grams / 1000, baby.gestational_days))
                       : null,
                     weight.length_mm != null
-                      ? withPercentile(`${formatCentimeters(weight.length_mm)} ${es.cm}`, growthPercentile("length", baby.sex, baby.born_on, weight.weighed_on, weight.length_mm / 10))
+                      ? withPercentile(`${formatCentimeters(weight.length_mm)} ${es.cm}`, growthPercentile("length", baby.sex, baby.born_on, weight.weighed_on, weight.length_mm / 10, baby.gestational_days))
                       : null,
                   ]
                     .filter((label): label is string => Boolean(label))

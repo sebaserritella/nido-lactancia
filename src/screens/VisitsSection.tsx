@@ -251,11 +251,11 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
 function visitMeasures(visit: PediatricVisit, baby: Baby): string[] {
   const parts: string[] = [];
   if (visit.grams != null) {
-    const percentile = growthPercentile("weight", baby.sex, baby.born_on, visit.visited_on, visit.grams / 1000);
+    const percentile = growthPercentile("weight", baby.sex, baby.born_on, visit.visited_on, visit.grams / 1000, baby.gestational_days);
     parts.push(`${formatKilograms(visit.grams)} ${es.kg}${percentile === null ? "" : ` · ${formatPercentile(percentile)}`}`);
   }
   if (visit.length_mm != null) {
-    const percentile = growthPercentile("length", baby.sex, baby.born_on, visit.visited_on, visit.length_mm / 10);
+    const percentile = growthPercentile("length", baby.sex, baby.born_on, visit.visited_on, visit.length_mm / 10, baby.gestational_days);
     parts.push(`${formatCentimeters(visit.length_mm)} ${es.cm}${percentile === null ? "" : ` · ${formatPercentile(percentile)}`}`);
   }
   return parts;

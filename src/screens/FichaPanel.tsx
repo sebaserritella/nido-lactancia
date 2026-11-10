@@ -10,9 +10,10 @@ import { whatsappUrl } from "../lib/whatsapp";
 import { DevelopmentSection } from "./DevelopmentSection";
 import { VaccinesSection } from "./VaccinesSection";
 import { VisitsSection } from "./VisitsSection";
+import { formatGestation, parseGestation } from "../lib/growth";
 
 const babyColumns =
-  "id, household_id, name, born_on, sex, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
+  "id, household_id, name, born_on, sex, gestational_days, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
 
 type FichaPanelProps = {
   client: SupabaseClient;
@@ -38,6 +39,7 @@ function normalizeBaby(row: Baby): Baby {
     pediatrician_name: row.pediatrician_name ?? null,
     pediatrician_phone: row.pediatrician_phone ?? null,
     sex: row.sex ?? null,
+    gestational_days: row.gestational_days ?? null,
     blood_type: row.blood_type ?? null,
     allergies: row.allergies ?? null,
     health_insurance: row.health_insurance ?? null,
@@ -66,6 +68,7 @@ export function FichaPanel({
   const [editPediatricianPhone, setEditPediatricianPhone] = useState("");
   const [editBloodType, setEditBloodType] = useState("");
   const [editSex, setEditSex] = useState<"" | "female" | "male">("");
+  const [editGestation, setEditGestation] = useState("");
   const [editAllergies, setEditAllergies] = useState("");
   const [editHealthInsurance, setEditHealthInsurance] = useState("");
   const [editHealthInsuranceCard, setEditHealthInsuranceCard] = useState("");
@@ -84,6 +87,7 @@ export function FichaPanel({
     setEditPediatricianPhone(baby.pediatrician_phone ?? "");
     setEditBloodType(baby.blood_type ?? "");
     setEditSex(baby.sex ?? "");
+    setEditGestation(baby.gestational_days != null ? formatGestation(baby.gestational_days).replace("+", ".") : "");
     setEditAllergies(baby.allergies ?? "");
     setEditHealthInsurance(baby.health_insurance ?? "");
     setEditHealthInsuranceCard(baby.health_insurance_card ?? "");
@@ -145,10 +149,16 @@ export function FichaPanel({
       return;
     }
     const nextBorn = editBornOn === "" ? null : editBornOn;
+    const nextGestation = parseGestation(editGestation);
+    if (nextGestation === undefined) {
+      onError(es.invalidGestationalAge);
+      return;
+    }
     const nextProfile = {
       name: trimmed,
       born_on: nextBorn,
       sex: editSex === "" ? null : editSex,
+      gestational_days: nextGestation,
       pediatrician_name: emptyToNull(editPediatrician),
       pediatrician_phone: emptyToNull(editPediatricianPhone),
       blood_type: emptyToNull(editBloodType),
@@ -192,6 +202,11 @@ export function FichaPanel({
               {selected.sex ? (
                 <p className="muted">
                   <strong>{es.sex}</strong>: {selected.sex === "female" ? es.sexFemale : es.sexMale}
+                </p>
+              ) : null}
+              {selected.gestational_days != null ? (
+                <p className="muted">
+                  <strong>{es.gestationalAge}</strong>: {es.gestationalAgeShort(formatGestation(selected.gestational_days))}
                 </p>
               ) : null}
               {selected.pediatrician_name ? (
@@ -259,6 +274,16 @@ export function FichaPanel({
                 <option value="female">{es.sexFemale}</option>
                 <option value="male">{es.sexMale}</option>
               </select>
+            </label>
+            <label>
+              {es.gestationalAge} <span className="muted">{es.vaccineOptional}</span>
+              <input
+                inputMode="decimal"
+                placeholder="37.1"
+                value={editGestation}
+                onChange={(event) => setEditGestation(event.target.value)}
+              />
+              <span className="item-note">{es.gestationalAgeHint}</span>
             </label>
             <label>
               {es.pediatrician}

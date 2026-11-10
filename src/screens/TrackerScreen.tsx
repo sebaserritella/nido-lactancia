@@ -16,7 +16,7 @@ import { TodayPanel } from "./TodayPanel";
 
 const babyStorageKey = "nido-lactancia.babyId";
 const babyColumns =
-  "id, household_id, name, born_on, sex, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
+  "id, household_id, name, born_on, sex, gestational_days, pediatrician_name, pediatrician_phone, blood_type, allergies, health_insurance, health_insurance_card";
 
 function normalizeBaby(row: Baby): Baby {
   return {
@@ -25,6 +25,7 @@ function normalizeBaby(row: Baby): Baby {
     pediatrician_name: row.pediatrician_name ?? null,
     pediatrician_phone: row.pediatrician_phone ?? null,
     sex: row.sex ?? null,
+    gestational_days: row.gestational_days ?? null,
     blood_type: row.blood_type ?? null,
     allergies: row.allergies ?? null,
     health_insurance: row.health_insurance ?? null,
@@ -84,6 +85,7 @@ export function TrackerScreen({
             ...baby,
             born_on: null,
             sex: null,
+            gestational_days: null,
             pediatrician_name: null,
             pediatrician_phone: null,
             blood_type: null,

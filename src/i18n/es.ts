@@ -74,6 +74,18 @@ export const es = {
   sexFemale: "Nena",
   sexMale: "Varón",
   sexUnset: "Sin indicar",
+  gestationalAge: "Semanas de gestación al nacer",
+  gestationalAgeShort: (value: string) => `${value} semanas`,
+  gestationalAgeHint: "Ej.: 37.1 = 37 semanas y 1 día. Con menos de 37, el peso y la talla se comparan por edad corregida.",
+  invalidGestationalAge: "Escribí semanas y días, como 37 o 37.1 (los días van de 0 a 6, entre 22 y 44 semanas).",
+  correctedAgeNote: (born: string, missing: string) =>
+    `Nació a las ${born} semanas: los percentiles usan la edad corregida (se descuentan ${missing}) hasta los 2 años.`,
+  missingWeeksDays: (weeks: number, days: number) =>
+    [weeks > 0 ? `${weeks} ${weeks === 1 ? "semana" : "semanas"}` : null, days > 0 ? `${days} ${days === 1 ? "día" : "días"}` : null]
+      .filter(Boolean)
+      .join(" y "),
+  beforeTermNote: "Antes de la fecha probable de parto las curvas de la OMS no aplican; el pediatra usa curvas para prematuros.",
+  correctedAgeAxis: "meses (edad corregida)",
   percentilesNeedSex: "Para ver los percentiles de la OMS, indicá el sexo en Ficha → Editar.",
   percentilesNeedBirth: "Para ver los percentiles de la OMS, cargá la fecha de nacimiento en Ficha.",
   growthWeightTitle: "Peso para la edad (OMS)",

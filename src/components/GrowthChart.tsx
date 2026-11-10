@@ -1,4 +1,4 @@
-import { ageInDays, lmsAt, maxAgeDays, percentileLines, valueAtZ, type GrowthKind, type Sex } from "../lib/growth";
+import { growthAgeDays, lmsAt, usesCorrectedAge, maxAgeDays, percentileLines, valueAtZ, type GrowthKind, type Sex } from "../lib/growth";
 import { es } from "../i18n/es";
 
 type Point = { measuredOn: string; value: number };
@@ -7,6 +7,7 @@ type GrowthChartProps = {
   kind: GrowthKind;
   sex: Sex;
   bornOn: string;
+  gestationalDays?: number | null;
   points: Point[];
 };
 
@@ -16,9 +17,9 @@ const pad = { left: 30, right: 30, top: 10, bottom: 28 };
 const monthDays = 30.4375;
 
 /** WHO percentile curves with the baby's measurements, from birth to a little past the last one. */
-export function GrowthChart({ kind, sex, bornOn, points }: GrowthChartProps) {
+export function GrowthChart({ kind, sex, bornOn, gestationalDays, points }: GrowthChartProps) {
   const measured = points
-    .map((point) => ({ age: ageInDays(bornOn, point.measuredOn), value: point.value }))
+    .map((point) => ({ age: growthAgeDays(bornOn, point.measuredOn, gestationalDays), value: point.value }))
     .filter((point) => point.age >= 0 && point.age <= maxAgeDays)
     .sort((left, right) => left.age - right.age);
   if (measured.length === 0) return null;
@@ -77,7 +78,7 @@ export function GrowthChart({ kind, sex, bornOn, points }: GrowthChartProps) {
           </text>
         ))}
         <text x={(pad.left + width - pad.right) / 2} y={height - 4} fontSize={9} textAnchor="middle" fill="#6e625a">
-          {es.growthAgeMonths}
+          {usesCorrectedAge(gestationalDays) ? es.correctedAgeAxis : es.growthAgeMonths}
         </text>
         <text x={pad.left + 4} y={pad.top + 8} fontSize={9} fill="#6e625a">
           {unit}

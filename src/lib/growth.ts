@@ -26,6 +26,47 @@ export function ageInDays(bornOn: string, measuredOn: string): number {
   return Math.round((Date.parse(`${measuredOn}T00:00:00Z`) - Date.parse(`${bornOn}T00:00:00Z`)) / DAY_MS);
 }
 
+/** 37+0 weeks, in days. */
+export const pretermBelowDays = 37 * 7;
+/** 40+0 weeks, in days. */
+export const termDays = 40 * 7;
+
+/** True when the baby is compared by corrected age: born before 37+0 weeks. */
+export function usesCorrectedAge(gestationalDays: number | null | undefined): gestationalDays is number {
+  return typeof gestationalDays === "number" && gestationalDays < pretermBelowDays;
+}
+
+/** Reads "37", "37.1", "37,1" or "37+1" as weeks and days (0–6). Empty is null; anything else is undefined. */
+export function parseGestation(text: string): number | null | undefined {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  const match = /^(\d{2})(?:\s*[.,+]\s*(\d))?$/.exec(trimmed);
+  if (!match) return undefined;
+  const weeks = Number(match[1]);
+  const days = match[2] === undefined ? 0 : Number(match[2]);
+  if (days > 6) return undefined;
+  const total = weeks * 7 + days;
+  if (total < 22 * 7 || total > 44 * 7 + 6) return undefined;
+  return total;
+}
+
+/** Days as "37+1" (or "37" with no extra days). */
+export function formatGestation(totalDays: number): string {
+  const weeks = Math.floor(totalDays / 7);
+  const days = totalDays % 7;
+  return days === 0 ? String(weeks) : `${weeks}+${days}`;
+}
+
+/**
+ * Age in days for the growth curves. Born before 37+0 weeks, the days missing to 40+0 are subtracted (corrected age)
+ * while the baby is under 2 years. Can be negative before the due date.
+ */
+export function growthAgeDays(bornOn: string, measuredOn: string, gestationalDays?: number | null): number {
+  const chronological = ageInDays(bornOn, measuredOn);
+  if (!usesCorrectedAge(gestationalDays) || chronological > maxAgeDays) return chronological;
+  return chronological - (termDays - gestationalDays);
+}
+
 /** L, M and S at an age, interpolated between the WHO nodes. Null outside 0–24 months. */
 export function lmsAt(kind: GrowthKind, sex: Sex, ageDays: number): { l: number; m: number; s: number } | null {
   const rows = table(kind, sex);
@@ -82,9 +123,10 @@ export function growthPercentile(
   bornOn: string | null | undefined,
   measuredOn: string,
   value: number,
+  gestationalDays?: number | null,
 ): number | null {
   if (!sex || !bornOn || !(value > 0)) return null;
-  const lms = lmsAt(kind, sex, ageInDays(bornOn, measuredOn));
+  const lms = lmsAt(kind, sex, growthAgeDays(bornOn, measuredOn, gestationalDays));
   if (!lms) return null;
   return percentileFromZ(zScore(kind, value, lms));
 }

@@ -8,6 +8,7 @@ export type Baby = {
   name: string;
   born_on: string | null;
   sex?: "female" | "male" | null;
+  gestational_days?: number | null;
   pediatrician_name: string | null;
   pediatrician_phone: string | null;
   blood_type: string | null;
