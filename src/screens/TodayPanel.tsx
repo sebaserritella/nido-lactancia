@@ -23,6 +23,7 @@ import { assignSessionId, type DismissedPair } from "../lib/feedSessions";
 import { parseMilliliters, validateFeedInterval } from "../lib/feedRules";
 import { localDateRangeToUtc, todayLocalDate, toDatetimeLocalValue, zonedTimeToUtc } from "../lib/localTime";
 import { WeightSection } from "./WeightSection";
+import { MedicationsSection } from "./MedicationsSection";
 
 type TodayPanelProps = {
   client: SupabaseClient;
@@ -638,6 +639,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
           ))}
         </ul>
       </section>
+      <MedicationsSection client={client} baby={baby} userId={userId} timeZone={timeZone} />
       <WeightSection client={client} baby={baby} timeZone={timeZone} />
     </div>
   );

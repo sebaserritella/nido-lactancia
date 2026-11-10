@@ -88,6 +88,21 @@ export type BabyVaccination = {
   lot_number: string | null;
 };
 
+export type Medication = {
+  id: string;
+  baby_id: string;
+  name: string;
+  dose: string | null;
+  times_per_day: number;
+};
+
+export type MedicationDose = {
+  id: string;
+  medication_id: string;
+  baby_id: string;
+  given_at: string;
+};
+
 export type PediatricVisit = {
   id: string;
   baby_id: string;

@@ -121,6 +121,24 @@ type BabyVaccinationRow = {
   updated_at: string;
 };
 
+type MedicationRow = {
+  id: string;
+  baby_id: string;
+  name: string;
+  dose: string | null;
+  times_per_day: number;
+  updated_by: string;
+  updated_at: string;
+};
+
+type MedicationDoseRow = {
+  id: string;
+  medication_id: string;
+  baby_id: string;
+  given_at: string;
+  given_by: string;
+};
+
 type PediatricVisitRow = {
   id: string;
   baby_id: string;
@@ -148,6 +166,8 @@ type Database = {
   vaccineCatalog: VaccineCatalogRow[];
   babyVaccinations: BabyVaccinationRow[];
   pediatricVisits: PediatricVisitRow[];
+  medications: MedicationRow[];
+  medicationDoses: MedicationDoseRow[];
   sessionUserId: string | null;
 };
 
@@ -192,6 +212,8 @@ export function createLocalClient(storage: Pick<Storage, "getItem" | "setItem"> 
       vaccineCatalog: parsed.vaccineCatalog?.length ? parsed.vaccineCatalog : seedVaccineCatalog(),
       babyVaccinations: parsed.babyVaccinations ?? [],
       pediatricVisits: parsed.pediatricVisits ?? [],
+      medications: parsed.medications ?? [],
+      medicationDoses: parsed.medicationDoses ?? [],
       sessionUserId: parsed.sessionUserId ?? null,
     };
     backfillHouseholdsFromMembers(db);
@@ -662,7 +684,7 @@ class Query {
     if (this.operation === "update") {
       for (const row of matched) {
         const patch = { ...this.payload };
-        if (this.table === "baby_vaccinations" || this.table === "pediatric_visits") {
+        if (this.table === "baby_vaccinations" || this.table === "pediatric_visits" || this.table === "medications") {
           patch.updated_by = db.sessionUserId;
           patch.updated_at = new Date().toISOString();
         }
@@ -686,6 +708,11 @@ class Query {
         db.weights = db.weights.filter((weight) => !ids.has(weight.baby_id));
         db.babyVaccinations = db.babyVaccinations.filter((vaccination) => !ids.has(vaccination.baby_id));
         db.pediatricVisits = db.pediatricVisits.filter((visit) => !ids.has(visit.baby_id));
+        db.medications = db.medications.filter((medication) => !ids.has(medication.baby_id));
+        db.medicationDoses = db.medicationDoses.filter((dose) => !ids.has(dose.baby_id));
+      }
+      if (this.table === "medications") {
+        db.medicationDoses = db.medicationDoses.filter((dose) => !ids.has(dose.medication_id));
       }
       if (this.table === "feeds") {
         db.feedPairDismissals = db.feedPairDismissals.filter(
@@ -762,6 +789,8 @@ function emptyDatabase(): Database {
     vaccineCatalog: seedVaccineCatalog(),
     babyVaccinations: [],
     pediatricVisits: [],
+    medications: [],
+    medicationDoses: [],
     sessionUserId: null,
   };
 }
@@ -823,6 +852,8 @@ function rowsOf(db: Database, table: string): Row[] {
   if (table === "vaccine_catalog") return db.vaccineCatalog as unknown as Row[];
   if (table === "baby_vaccinations") return db.babyVaccinations as unknown as Row[];
   if (table === "pediatric_visits") return db.pediatricVisits as unknown as Row[];
+  if (table === "medications") return db.medications as unknown as Row[];
+  if (table === "medication_doses") return db.medicationDoses as unknown as Row[];
   return [];
 }
 
@@ -835,6 +866,8 @@ function replaceRows(db: Database, table: string, rows: Row[]) {
   if (table === "vaccine_catalog") db.vaccineCatalog = rows as unknown as VaccineCatalogRow[];
   if (table === "baby_vaccinations") db.babyVaccinations = rows as unknown as BabyVaccinationRow[];
   if (table === "pediatric_visits") db.pediatricVisits = rows as unknown as PediatricVisitRow[];
+  if (table === "medications") db.medications = rows as unknown as MedicationRow[];
+  if (table === "medication_doses") db.medicationDoses = rows as unknown as MedicationDoseRow[];
   if (table === "invites") db.invites = rows as unknown as InviteRow[];
   if (table === "email_invites") db.emailInvites = rows as unknown as EmailInviteRow[];
   if (table === "household_members") db.members = rows as unknown as MemberRow[];

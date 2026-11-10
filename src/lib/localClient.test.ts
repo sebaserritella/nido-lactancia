@@ -573,3 +573,29 @@ describe("local client", () => {
     expect(saved.data).toMatchObject({ reason: "Control", grams: null, length_mm: null });
   });
 });
+
+describe("local medications", () => {
+  it("removes a medication's doses with it", async () => {
+    const client = createLocalClient(memoryStorage());
+    await client.auth.signUp({ email: "mama@example.com", password: "secret1" });
+    const household = await client.rpc("bootstrap_household");
+    const baby = await client
+      .from("babies")
+      .insert({ household_id: household.data, name: "Lola", born_on: "2026-03-12" })
+      .select("id")
+      .single();
+    const babyId = (baby.data as { id: string }).id;
+    const medication = await client
+      .from("medications")
+      .insert({ baby_id: babyId, name: "Vitamina D", dose: null, times_per_day: 1 })
+      .select("id")
+      .single();
+    const medicationId = (medication.data as { id: string }).id;
+    await client
+      .from("medication_doses")
+      .insert({ medication_id: medicationId, baby_id: babyId, given_at: new Date().toISOString() });
+    expect((await client.from("medication_doses").select("id").eq("baby_id", babyId)).data).toHaveLength(1);
+    await client.from("medications").delete().eq("id", medicationId);
+    expect((await client.from("medication_doses").select("id").eq("baby_id", babyId)).data).toHaveLength(0);
+  });
+});
