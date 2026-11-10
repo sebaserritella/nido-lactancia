@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Baby, Weight } from "../domain";
 import { es } from "../i18n/es";
-import { formatCalendarDate } from "../lib/age";
+import { DateBlock } from "../components/DateBlock";
 import { messageForError } from "../lib/errors";
 import { trackAttempt, trackRejected, trackSaved } from "../lib/analytics";
 import { centimetersToMillimeters, formatCentimeters } from "../lib/length";
@@ -178,9 +178,10 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
         <ul className="entries plain">
           {weights.map((weight) => (
             <li key={weight.id}>
-              <div className="entry-copy weight-meta">
-                <strong>{formatCalendarDate(weight.weighed_on)}</strong>
-                <span>
+              <div className="item">
+              <DateBlock isoDate={weight.weighed_on} currentYear={todayLocalDate(timeZone).slice(0, 4)} />
+              <div className="item-body">
+                <div className="chips">
                   {[
                     weight.grams != null
                       ? withPercentile(`${formatKilograms(weight.grams)} ${es.kg}`, growthPercentile("weight", baby.sex, baby.born_on, weight.weighed_on, weight.grams / 1000))
@@ -189,17 +190,22 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
                       ? withPercentile(`${formatCentimeters(weight.length_mm)} ${es.cm}`, growthPercentile("length", baby.sex, baby.born_on, weight.weighed_on, weight.length_mm / 10))
                       : null,
                   ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </div>
+                    .filter((label): label is string => Boolean(label))
+                    .map((label, index) => (
+                      <span key={label} className={index === 0 ? "chip ok item-title-chip" : "chip ok"}>
+                        {label}
+                      </span>
+                    ))}
+                </div>
               <div className="row-actions">
                 <button type="button" className="ghost" onClick={() => setEditingId(weight.id)}>
                   {es.editWeight}
                 </button>
-                <button type="button" className="ghost" onClick={() => remove(weight.id)}>
+                <button type="button" className="danger" onClick={() => remove(weight.id)}>
                   {es.deleteWeight}
                 </button>
+              </div>
+              </div>
               </div>
               {editingId === weight.id ? (
                 <WeightForm
@@ -274,5 +280,5 @@ function WeightForm({
 }
 
 function withPercentile(label: string, percentile: number | null): string {
-  return percentile === null ? label : `${label} (${formatPercentile(percentile)})`;
+  return percentile === null ? label : `${label} · ${formatPercentile(percentile)}`;
 }

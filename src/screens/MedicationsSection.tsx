@@ -147,10 +147,12 @@ export function MedicationsSection({ client, baby, userId, timeZone }: Medicatio
               .join(" · ");
             return (
               <li key={medication.id}>
-                <div className="entry-copy weight-meta">
-                  <strong>{medication.name}</strong>
-                  {medication.dose ? <span>{medication.dose}</span> : null}
-                  <span className="muted">{status}</span>
+                <div className="item-body">
+                  <span className="item-title">{medication.name}</span>
+                  <div className="chips">
+                    {medication.dose ? <span className="chip">{medication.dose}</span> : null}
+                    <span className={done ? "chip ok" : "chip accent"}>{status}</span>
+                  </div>
                 </div>
                 <div className="row-actions">
                   <button
@@ -176,7 +178,7 @@ export function MedicationsSection({ client, baby, userId, timeZone }: Medicatio
                   >
                     {es.editMedication}
                   </button>
-                  <button type="button" className="ghost" onClick={() => void remove(medication.id)}>
+                  <button type="button" className="danger" onClick={() => void remove(medication.id)}>
                     {es.deleteMedication}
                   </button>
                 </div>

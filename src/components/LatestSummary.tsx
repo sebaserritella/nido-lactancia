@@ -4,7 +4,8 @@ import { DiaperIcon, FeedIcon } from "./EventIcons";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
 import { formatMinutes } from "../lib/format";
-import { formatLatestFeedLine, formatLatestStamp } from "../lib/latestStamp";
+import { formatLatestStamp } from "../lib/latestStamp";
+import { activeMinutes } from "../lib/feedDuration";
 import { latestToma, nextSide as nextSideFrom } from "../lib/latestToma";
 import { readResume, rememberLatest, type CachedDiaper, type CachedFeed } from "../lib/resume";
 
@@ -151,12 +152,7 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
   }, [babyId, client, refreshKey, timeZone, userId]);
 
   const toma = feed && feed.kind !== "bottle" && session.length > 1 ? latestToma(session) : null;
-  const tomaTotal = toma ? es.totalTime(formatMinutes(toma.minutes) ?? "0 min") : "";
-  const tomaLine = !toma
-    ? ""
-    : toma.endedAt === null
-      ? `${toma.paused ? es.paused : es.inProgress} · ${tomaTotal}`
-      : `${formatLatestStamp(toma.endedAt, timeZone)} · ${tomaTotal}`;
+  const feedView = describeFeed(feed, toma, timeZone);
 
   return (
     <section className="latest">
@@ -165,44 +161,63 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
           <FeedIcon />
           <h2>{es.latestFeed}</h2>
         </div>
-        {ready && toma ? (
+        {!ready ? (
+          <p className="latest-sub">{es.loading}</p>
+        ) : feedView ? (
           <>
-            <p>
-              {toma.sides.map(sideLabel).join(" + ")} · <span className="muted">{es.groupedFeed(toma.count)}</span>
-            </p>
-            <p className="muted">{tomaLine}</p>
+            <p className="latest-main">{feedView.main}</p>
+            <p className="latest-sub">{feedView.sub}</p>
+            {toma || nextSide ? (
+              <div className="chips">
+                {toma ? <span className="chip">{es.groupedFeed(toma.count)}</span> : null}
+                {nextSide ? <span className="chip accent">{es.nextSide(sideLabel(nextSide))}</span> : null}
+              </div>
+            ) : null}
           </>
-        ) : null}
-        {ready && feed && !toma ? <p>{feed.kind === "bottle" ? es.bottle : feed.side ? sideLabel(feed.side) : ""}</p> : null}
-        {ready && toma ? null : (
-          <p className="muted">
-            {!ready
-              ? es.loading
-              : feed
-                ? feed.kind === "bottle"
-                  ? `${formatLatestStamp(feed.started_at, timeZone)} · ${feed.ml} ${es.ml}`
-                  : formatLatestFeedLine(
-                      feed.started_at,
-                      feed.ended_at,
-                      timeZone,
-                      feed.paused_at ? es.paused : es.inProgress,
-                      new Date(),
-                      feed.paused_ms ?? 0,
-                    )
-                : es.noFeedsYet}
-          </p>
+        ) : (
+          <p className="latest-sub">{es.noFeedsYet}</p>
         )}
-        {ready && nextSide ? <p>{es.nextSide(sideLabel(nextSide))}</p> : null}
       </article>
       <article className="card">
         <div className="entry-line">
           <DiaperIcon />
           <h2>{es.latestDiaper}</h2>
         </div>
-        {ready && diaper ? <p>{diaperLabel(diaper.kind)}</p> : null}
-        <p className="muted">{!ready ? es.loading : diaper ? formatLatestStamp(diaper.occurred_at, timeZone) : es.noDiapersYet}</p>
+        {!ready ? (
+          <p className="latest-sub">{es.loading}</p>
+        ) : diaper ? (
+          <>
+            <p className="latest-main">{formatLatestStamp(diaper.occurred_at, timeZone)}</p>
+            <p className="latest-sub">{diaperLabel(diaper.kind)}</p>
+          </>
+        ) : (
+          <p className="latest-sub">{es.noDiapersYet}</p>
+        )}
       </article>
       {error ? <p className="error">{error}</p> : null}
     </section>
   );
+}
+
+/** Main line (when) and detail line (what and how long) for the latest feed or grouped toma. */
+function describeFeed(
+  feed: LatestFeed | null,
+  toma: ReturnType<typeof latestToma>,
+  timeZone: string,
+): { main: string; sub: string } | null {
+  if (!feed) return null;
+  if (toma) {
+    const main = toma.endedAt === null ? (toma.paused ? es.paused : es.inProgress) : formatLatestStamp(toma.endedAt, timeZone);
+    const sides = toma.sides.map(sideLabel).join(" + ");
+    return { main, sub: `${sides} · ${es.totalTime(formatMinutes(toma.minutes) ?? "0 min")}` };
+  }
+  if (feed.kind === "bottle") {
+    return { main: formatLatestStamp(feed.started_at, timeZone), sub: `${es.bottle} · ${feed.ml ?? 0} ${es.ml}` };
+  }
+  const side = feed.side ? sideLabel(feed.side) : "";
+  if (feed.ended_at === null) {
+    return { main: feed.paused_at ? es.paused : es.inProgress, sub: side };
+  }
+  const minutes = formatMinutes(activeMinutes({ started_at: feed.started_at, ended_at: feed.ended_at, paused_ms: feed.paused_ms ?? 0 }));
+  return { main: formatLatestStamp(feed.ended_at, timeZone), sub: [side, minutes].filter(Boolean).join(" · ") };
 }

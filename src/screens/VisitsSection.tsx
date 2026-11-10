@@ -2,12 +2,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Baby, PediatricVisit } from "../domain";
 import { es } from "../i18n/es";
-import { formatCalendarDate } from "../lib/age";
+import { DateBlock } from "../components/DateBlock";
 import { messageForError } from "../lib/errors";
 import { centimetersToMillimeters, formatCentimeters } from "../lib/length";
 import { todayLocalDate } from "../lib/localTime";
 import { isFutureDate } from "../lib/vaccines";
 import { formatKilograms, kilogramsToGrams } from "../lib/weight";
+import { formatPercentile, growthPercentile } from "../lib/growth";
 
 const visitColumns = "id, baby_id, visited_on, reason, provider, notes, grams, length_mm";
 
@@ -194,13 +195,21 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
         <ul className="entries plain">
           {visits.map((visit) => (
             <li key={visit.id}>
-              <div className="entry-copy weight-meta">
-                <strong>{formatCalendarDate(visit.visited_on)}</strong>
-                <span>{visit.reason}</span>
-                {visit.provider ? <span className="muted">{visit.provider}</span> : null}
-                {visitMeta(visit) ? <span className="muted">{visitMeta(visit)}</span> : null}
-                {visit.notes ? <span className="muted">{visit.notes}</span> : null}
-              </div>
+              <div className="item">
+              <DateBlock isoDate={visit.visited_on} currentYear={today.slice(0, 4)} />
+              <div className="item-body">
+                <span className="item-title">{visit.reason}</span>
+                {visit.provider || visit.grams != null || visit.length_mm != null ? (
+                  <div className="chips">
+                    {visit.provider ? <span className="chip">{visit.provider}</span> : null}
+                    {visitMeasures(visit, baby).map((measure) => (
+                      <span key={measure} className="chip ok">
+                        {measure}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {visit.notes ? <span className="item-note">{visit.notes}</span> : null}
               <div className="row-actions">
                 <button
                   type="button"
@@ -212,9 +221,11 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
                 >
                   {es.editVisit}
                 </button>
-                <button type="button" className="ghost" onClick={() => void remove(visit.id)}>
+                <button type="button" className="danger" onClick={() => void remove(visit.id)}>
                   {es.deleteVisit}
                 </button>
+              </div>
+              </div>
               </div>
               {editingId === visit.id ? (
                 <VisitForm
@@ -237,12 +248,17 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
   );
 }
 
-function visitMeta(visit: PediatricVisit): string | null {
-  const parts = [
-    visit.grams != null ? `${formatKilograms(visit.grams)} ${es.kg}` : null,
-    visit.length_mm != null ? `${formatCentimeters(visit.length_mm)} ${es.cm}` : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
+function visitMeasures(visit: PediatricVisit, baby: Baby): string[] {
+  const parts: string[] = [];
+  if (visit.grams != null) {
+    const percentile = growthPercentile("weight", baby.sex, baby.born_on, visit.visited_on, visit.grams / 1000);
+    parts.push(`${formatKilograms(visit.grams)} ${es.kg}${percentile === null ? "" : ` · ${formatPercentile(percentile)}`}`);
+  }
+  if (visit.length_mm != null) {
+    const percentile = growthPercentile("length", baby.sex, baby.born_on, visit.visited_on, visit.length_mm / 10);
+    parts.push(`${formatCentimeters(visit.length_mm)} ${es.cm}${percentile === null ? "" : ` · ${formatPercentile(percentile)}`}`);
+  }
+  return parts;
 }
 
 function VisitForm({
