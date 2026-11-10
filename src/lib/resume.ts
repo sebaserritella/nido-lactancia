@@ -14,6 +14,7 @@ export type CachedFeed = {
   side: FeedSide | null;
   kind: FeedKind;
   ml: number | null;
+  session_id?: string | null;
 };
 
 export type CachedDiaper = {
@@ -25,6 +26,8 @@ export type CachedDiaper = {
 export type CachedLatest = {
   feed: CachedFeed | null;
   diaper: CachedDiaper | null;
+  /** Every feed of the latest feed's group, when it is grouped. */
+  session?: CachedFeed[];
 };
 
 export type Resume = {
@@ -224,10 +227,12 @@ function sanitizeLatest(value: unknown): Record<string, CachedLatest> {
   const latest: Record<string, CachedLatest> = {};
   for (const [babyId, entry] of Object.entries(value as Record<string, unknown>)) {
     if (!entry || typeof entry !== "object") continue;
-    const record = entry as { feed?: unknown; diaper?: unknown };
+    const record = entry as { feed?: unknown; diaper?: unknown; session?: unknown };
+    const session = Array.isArray(record.session) ? record.session.filter(isCachedFeed) : [];
     latest[babyId] = {
       feed: isCachedFeed(record.feed) ? record.feed : null,
       diaper: isCachedDiaper(record.diaper) ? record.diaper : null,
+      ...(session.length > 1 ? { session } : {}),
     };
   }
   return latest;
@@ -244,7 +249,8 @@ function isCachedFeed(value: unknown): value is CachedFeed {
     (feed.paused_at === null || typeof feed.paused_at === "string") &&
     (feed.side === null || feed.side === "left" || feed.side === "right" || feed.side === "both") &&
     (feed.kind === "breast" || feed.kind === "bottle") &&
-    (feed.ml === null || typeof feed.ml === "number")
+    (feed.ml === null || typeof feed.ml === "number") &&
+    (feed.session_id === undefined || feed.session_id === null || typeof feed.session_id === "string")
   );
 }
 

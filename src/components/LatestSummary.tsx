@@ -3,7 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { DiaperIcon, FeedIcon } from "./EventIcons";
 import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
+import { formatMinutes } from "../lib/format";
 import { formatLatestFeedLine, formatLatestStamp } from "../lib/latestStamp";
+import { latestToma } from "../lib/latestToma";
 import { readResume, rememberLatest, type CachedDiaper, type CachedFeed } from "../lib/resume";
 
 type LatestSummaryProps = {
@@ -17,7 +19,7 @@ type LatestSummaryProps = {
 type LatestFeed = CachedFeed;
 type LatestDiaper = CachedDiaper;
 
-const feedColumns = "id, started_at, ended_at, paused_ms, paused_at, side, kind, ml";
+const feedColumns = "id, started_at, ended_at, paused_ms, paused_at, side, kind, ml, session_id";
 const diaperColumns = "id, occurred_at, kind";
 
 function normalizeFeed(value: unknown): LatestFeed | null {
@@ -34,6 +36,7 @@ function normalizeFeed(value: unknown): LatestFeed | null {
     side: feed.side ?? null,
     kind: feed.kind,
     ml: feed.ml ?? null,
+    session_id: feed.session_id ?? null,
   };
 }
 
@@ -44,14 +47,18 @@ function normalizeDiaper(value: unknown): LatestDiaper | null {
   return { id: diaper.id, occurred_at: diaper.occurred_at, kind: diaper.kind };
 }
 
-function cachedLatest(userId: string, babyId: string): { feed: LatestFeed | null; diaper: LatestDiaper | null; ready: boolean } {
+function cachedLatest(
+  userId: string,
+  babyId: string,
+): { feed: LatestFeed | null; session: LatestFeed[]; diaper: LatestDiaper | null; ready: boolean } {
   const entry = readResume(localStorage, userId)?.latest[babyId];
-  if (!entry) return { feed: null, diaper: null, ready: false };
-  return { feed: entry.feed, diaper: entry.diaper, ready: true };
+  if (!entry) return { feed: null, session: [], diaper: null, ready: false };
+  return { feed: entry.feed, session: entry.session ?? [], diaper: entry.diaper, ready: true };
 }
 
 export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: LatestSummaryProps) {
   const [feed, setFeed] = useState<LatestFeed | null>(() => cachedLatest(userId, babyId).feed);
+  const [session, setSession] = useState<LatestFeed[]>(() => cachedLatest(userId, babyId).session);
   const [diaper, setDiaper] = useState<LatestDiaper | null>(() => cachedLatest(userId, babyId).diaper);
   const [ready, setReady] = useState(() => cachedLatest(userId, babyId).ready);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +66,7 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
   useEffect(() => {
     const cached = cachedLatest(userId, babyId);
     setFeed(cached.feed);
+    setSession(cached.session);
     setDiaper(cached.diaper);
     setReady(cached.ready);
     setError(null);
@@ -92,13 +100,32 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
         setReady(true);
         return;
       }
-      setError(null);
       const nextFeed = normalizeFeed(feedResult.data);
+      let nextSession: LatestFeed[] = [];
+      if (nextFeed?.session_id) {
+        const sessionResult = await client
+          .from("feeds")
+          .select(feedColumns)
+          .eq("baby_id", babyId)
+          .eq("session_id", nextFeed.session_id)
+          .order("started_at", { ascending: true });
+        if (ignore || current !== request) return;
+        if (!sessionResult.error) {
+          const rows = ((sessionResult.data ?? []) as unknown[]).map(normalizeFeed).filter((row): row is LatestFeed => row !== null);
+          if (rows.length > 1) nextSession = rows;
+        }
+      }
+      setError(null);
       const nextDiaper = normalizeDiaper(diaperResult.data);
       setFeed(nextFeed);
+      setSession(nextSession);
       setDiaper(nextDiaper);
       setReady(true);
-      rememberLatest(localStorage, userId, babyId, { feed: nextFeed, diaper: nextDiaper });
+      rememberLatest(localStorage, userId, babyId, {
+        feed: nextFeed,
+        diaper: nextDiaper,
+        ...(nextSession.length > 1 ? { session: nextSession } : {}),
+      });
     }
     void load();
     const channel = client
@@ -112,6 +139,14 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
     };
   }, [babyId, client, refreshKey, timeZone, userId]);
 
+  const toma = feed && feed.kind !== "bottle" && session.length > 1 ? latestToma(session) : null;
+  const tomaTotal = toma ? es.totalTime(formatMinutes(toma.minutes) ?? "0 min") : "";
+  const tomaLine = !toma
+    ? ""
+    : toma.endedAt === null
+      ? `${toma.paused ? es.paused : es.inProgress} · ${tomaTotal}`
+      : `${formatLatestStamp(toma.endedAt, timeZone)} · ${tomaTotal}`;
+
   return (
     <section className="latest">
       <article className="card">
@@ -119,23 +154,33 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
           <FeedIcon />
           <h2>{es.latestFeed}</h2>
         </div>
-        {ready && feed ? <p>{feed.kind === "bottle" ? es.bottle : feed.side ? sideLabel(feed.side) : ""}</p> : null}
-        <p className="muted">
-          {!ready
-            ? es.loading
-            : feed
-              ? feed.kind === "bottle"
-                ? `${formatLatestStamp(feed.started_at, timeZone)} · ${feed.ml} ${es.ml}`
-                : formatLatestFeedLine(
-                    feed.started_at,
-                    feed.ended_at,
-                    timeZone,
-                    feed.paused_at ? es.paused : es.inProgress,
-                    new Date(),
-                    feed.paused_ms ?? 0,
-                  )
-              : es.noFeedsYet}
-        </p>
+        {ready && toma ? (
+          <>
+            <p>
+              {toma.sides.map(sideLabel).join(" + ")} · <span className="muted">{es.groupedFeed(toma.count)}</span>
+            </p>
+            <p className="muted">{tomaLine}</p>
+          </>
+        ) : null}
+        {ready && feed && !toma ? <p>{feed.kind === "bottle" ? es.bottle : feed.side ? sideLabel(feed.side) : ""}</p> : null}
+        {ready && toma ? null : (
+          <p className="muted">
+            {!ready
+              ? es.loading
+              : feed
+                ? feed.kind === "bottle"
+                  ? `${formatLatestStamp(feed.started_at, timeZone)} · ${feed.ml} ${es.ml}`
+                  : formatLatestFeedLine(
+                      feed.started_at,
+                      feed.ended_at,
+                      timeZone,
+                      feed.paused_at ? es.paused : es.inProgress,
+                      new Date(),
+                      feed.paused_ms ?? 0,
+                    )
+                : es.noFeedsYet}
+          </p>
+        )}
       </article>
       <article className="card">
         <div className="entry-line">
