@@ -171,7 +171,7 @@ export function WeightSection({ client, baby, timeZone }: WeightSectionProps) {
             bornOn={baby.born_on}
             points={weights.filter((weight) => weight.length_mm != null).map((weight) => ({ measuredOn: weight.weighed_on, value: weight.length_mm! / 10 }))}
           />
-          <p className="muted">{es.growthNote}</p>
+          <p className="item-note">{es.growthNote}</p>
         </>
       ) : null}
       {weights.length > 0 ? (
