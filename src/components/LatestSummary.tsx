@@ -5,7 +5,7 @@ import { diaperLabel, es, sideLabel } from "../i18n/es";
 import { messageForError } from "../lib/errors";
 import { formatMinutes } from "../lib/format";
 import { formatLatestFeedLine, formatLatestStamp } from "../lib/latestStamp";
-import { latestToma } from "../lib/latestToma";
+import { latestToma, nextSide as nextSideFrom } from "../lib/latestToma";
 import { readResume, rememberLatest, type CachedDiaper, type CachedFeed } from "../lib/resume";
 
 type LatestSummaryProps = {
@@ -50,15 +50,22 @@ function normalizeDiaper(value: unknown): LatestDiaper | null {
 function cachedLatest(
   userId: string,
   babyId: string,
-): { feed: LatestFeed | null; session: LatestFeed[]; diaper: LatestDiaper | null; ready: boolean } {
+): {
+  feed: LatestFeed | null;
+  session: LatestFeed[];
+  nextSide: "left" | "right" | null;
+  diaper: LatestDiaper | null;
+  ready: boolean;
+} {
   const entry = readResume(localStorage, userId)?.latest[babyId];
-  if (!entry) return { feed: null, session: [], diaper: null, ready: false };
-  return { feed: entry.feed, session: entry.session ?? [], diaper: entry.diaper, ready: true };
+  if (!entry) return { feed: null, session: [], nextSide: null, diaper: null, ready: false };
+  return { feed: entry.feed, session: entry.session ?? [], nextSide: entry.nextSide ?? null, diaper: entry.diaper, ready: true };
 }
 
 export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: LatestSummaryProps) {
   const [feed, setFeed] = useState<LatestFeed | null>(() => cachedLatest(userId, babyId).feed);
   const [session, setSession] = useState<LatestFeed[]>(() => cachedLatest(userId, babyId).session);
+  const [nextSide, setNextSide] = useState<"left" | "right" | null>(() => cachedLatest(userId, babyId).nextSide);
   const [diaper, setDiaper] = useState<LatestDiaper | null>(() => cachedLatest(userId, babyId).diaper);
   const [ready, setReady] = useState(() => cachedLatest(userId, babyId).ready);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +74,7 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
     const cached = cachedLatest(userId, babyId);
     setFeed(cached.feed);
     setSession(cached.session);
+    setNextSide(cached.nextSide);
     setDiaper(cached.diaper);
     setReady(cached.ready);
     setError(null);
@@ -83,8 +91,7 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
           .select(feedColumns)
           .eq("baby_id", babyId)
           .order("started_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
+          .limit(20),
         client
           .from("diapers")
           .select(diaperColumns)
@@ -100,7 +107,9 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
         setReady(true);
         return;
       }
-      const nextFeed = normalizeFeed(feedResult.data);
+      const recent = ((feedResult.data ?? []) as unknown[]).map(normalizeFeed).filter((row): row is LatestFeed => row !== null);
+      const nextFeed = recent[0] ?? null;
+      const upcomingSide = nextSideFrom(recent);
       let nextSession: LatestFeed[] = [];
       if (nextFeed?.session_id) {
         const sessionResult = await client
@@ -119,12 +128,14 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
       const nextDiaper = normalizeDiaper(diaperResult.data);
       setFeed(nextFeed);
       setSession(nextSession);
+      setNextSide(upcomingSide);
       setDiaper(nextDiaper);
       setReady(true);
       rememberLatest(localStorage, userId, babyId, {
         feed: nextFeed,
         diaper: nextDiaper,
         ...(nextSession.length > 1 ? { session: nextSession } : {}),
+        nextSide: upcomingSide,
       });
     }
     void load();
@@ -181,6 +192,7 @@ export function LatestSummary({ client, userId, babyId, timeZone, refreshKey }: 
                 : es.noFeedsYet}
           </p>
         )}
+        {ready && nextSide ? <p>{es.nextSide(sideLabel(nextSide))}</p> : null}
       </article>
       <article className="card">
         <div className="entry-line">

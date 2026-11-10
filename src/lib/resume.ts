@@ -28,6 +28,8 @@ export type CachedLatest = {
   diaper: CachedDiaper | null;
   /** Every feed of the latest feed's group, when it is grouped. */
   session?: CachedFeed[];
+  /** The breast to offer next, from the last breast feed. */
+  nextSide?: "left" | "right" | null;
 };
 
 export type Resume = {
@@ -227,12 +229,13 @@ function sanitizeLatest(value: unknown): Record<string, CachedLatest> {
   const latest: Record<string, CachedLatest> = {};
   for (const [babyId, entry] of Object.entries(value as Record<string, unknown>)) {
     if (!entry || typeof entry !== "object") continue;
-    const record = entry as { feed?: unknown; diaper?: unknown; session?: unknown };
+    const record = entry as { feed?: unknown; diaper?: unknown; session?: unknown; nextSide?: unknown };
     const session = Array.isArray(record.session) ? record.session.filter(isCachedFeed) : [];
     latest[babyId] = {
       feed: isCachedFeed(record.feed) ? record.feed : null,
       diaper: isCachedDiaper(record.diaper) ? record.diaper : null,
       ...(session.length > 1 ? { session } : {}),
+      ...(record.nextSide === "left" || record.nextSide === "right" ? { nextSide: record.nextSide } : {}),
     };
   }
   return latest;

@@ -199,6 +199,7 @@ export function VisitsSection({ client, baby, userId, timeZone }: VisitsSectionP
                 <span>{visit.reason}</span>
                 {visit.provider ? <span className="muted">{visit.provider}</span> : null}
                 {visitMeta(visit) ? <span className="muted">{visitMeta(visit)}</span> : null}
+                {visit.notes ? <span className="muted">{visit.notes}</span> : null}
               </div>
               <div className="row-actions">
                 <button

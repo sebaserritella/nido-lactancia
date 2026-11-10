@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latestToma } from "./latestToma";
+import { latestToma, nextSide } from "./latestToma";
 
 describe("latestToma", () => {
   it("returns null without feeds", () => {
@@ -34,5 +34,22 @@ describe("latestToma", () => {
       { started_at: "2026-10-04T17:20:00.000Z", ended_at: null, paused_ms: 0, paused_at: "2026-10-04T17:25:00.000Z", side: "left" },
     ]);
     expect(toma).toMatchObject({ grouped: true, sides: ["left"], endedAt: null, paused: true, minutes: 12 });
+  });
+});
+
+describe("nextSide", () => {
+  const done = "2026-10-04T17:00:00.000Z";
+  it("offers the other breast", () => {
+    expect(nextSide([{ ended_at: done, side: "left", kind: "breast" }])).toBe("right");
+    expect(nextSide([{ ended_at: done, side: "right", kind: "breast" }])).toBe("left");
+  });
+  it("skips bottles to find the last breast feed", () => {
+    expect(nextSide([{ ended_at: done, side: null, kind: "bottle" }, { ended_at: done, side: "left", kind: "breast" }])).toBe("right");
+  });
+  it("says nothing while a feed is open, after both, or without breast feeds", () => {
+    expect(nextSide([{ ended_at: null, side: "left", kind: "breast" }])).toBeNull();
+    expect(nextSide([{ ended_at: done, side: "both", kind: "breast" }])).toBeNull();
+    expect(nextSide([{ ended_at: done, side: null, kind: "bottle" }])).toBeNull();
+    expect(nextSide([])).toBeNull();
   });
 });

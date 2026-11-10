@@ -40,3 +40,18 @@ export function latestToma<T extends TomaFeed>(feeds: T[]): LatestToma | null {
     minutes,
   };
 }
+
+type SideFeed = {
+  ended_at: string | null;
+  side: "left" | "right" | "both" | null;
+  kind?: "breast" | "bottle";
+};
+
+/** The breast to offer next: the other one from the last breast feed. Null while a feed is open, after "both", or with no breast feed. Expects newest first. */
+export function nextSide(feeds: SideFeed[]): "left" | "right" | null {
+  const last = feeds.find((feed) => feed.kind !== "bottle" && feed.side !== null);
+  if (!last || last.ended_at === null) return null;
+  if (last.side === "left") return "right";
+  if (last.side === "right") return "left";
+  return null;
+}

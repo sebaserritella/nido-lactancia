@@ -114,6 +114,7 @@ export const es = {
   deleteWeight: "Borrar",
   noEntries: "Todavía no hay nada hoy.",
   latestFeed: "Última toma",
+  nextSide: (side: string) => `Próximo: ${side}`,
   groupedFeed: (count: number) => `Agrupada (${count} tramos)`,
   totalTime: (minutes: string) => `${minutes} en total`,
   latestDiaper: "Último pañal",
