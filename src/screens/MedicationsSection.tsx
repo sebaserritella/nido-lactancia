@@ -154,10 +154,10 @@ export function MedicationsSection({ client, baby, userId, timeZone }: Medicatio
                     <span className={done ? "chip ok" : "chip accent"}>{status}</span>
                   </div>
                 </div>
-                <div className="row-actions">
+                <div className="row-actions med-actions">
                   <button
                     type="button"
-                    className={done ? "ghost" : undefined}
+                    className={done ? "ghost med-give" : "med-give"}
                     disabled={busyId === medication.id}
                     onClick={() => void give(medication)}
                   >

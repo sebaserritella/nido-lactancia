@@ -560,6 +560,7 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                 <button
                   type="button"
                   className="ghost"
+                  aria-label={es.editFeed}
                   onClick={() => {
                     if (feed.kind === "bottle") {
                       setMlText(feed.ml == null ? "" : String(feed.ml));
@@ -568,10 +569,10 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
                     setEditing(feed);
                   }}
                 >
-                  {es.editFeed}
+                  {es.editShort}
                 </button>
-                <button type="button" className="ghost" onClick={() => removeFeed(feed.id)}>
-                  {es.deleteFeed}
+                <button type="button" className="danger" aria-label={es.deleteFeed} onClick={() => removeFeed(feed.id)}>
+                  {es.deleteShort}
                 </button>
               </div>
               {editing?.id === feed.id && feed.kind === "bottle" ? (
@@ -615,16 +616,18 @@ export function TodayPanel({ client, baby, userId, timeZone }: TodayPanelProps) 
               <div className="entry-line">
                 <DiaperIcon />
                 <div className="entry-copy">
-                  <strong>{toDatetimeLocalValue(diaper.occurred_at, timeZone).slice(11)}</strong>
-                  <span>{diaperLabel(diaper.kind)}</span>
+                  <strong className="entry-time">{toDatetimeLocalValue(diaper.occurred_at, timeZone).slice(11)}</strong>
+                  <div className="chips">
+                    <span className="chip">{diaperLabel(diaper.kind)}</span>
+                  </div>
                 </div>
               </div>
               <div className="row-actions">
-                <button type="button" className="ghost" onClick={() => setEditingDiaper(diaper)}>
-                  {es.editDiaper}
+                <button type="button" className="ghost" aria-label={es.editDiaper} onClick={() => setEditingDiaper(diaper)}>
+                  {es.editShort}
                 </button>
-                <button type="button" className="ghost" onClick={() => removeDiaper(diaper.id)}>
-                  {es.deleteDiaper}
+                <button type="button" className="danger" aria-label={es.deleteDiaper} onClick={() => removeDiaper(diaper.id)}>
+                  {es.deleteShort}
                 </button>
               </div>
               {editingDiaper?.id === diaper.id ? (

@@ -73,9 +73,11 @@ export function FeedLog({
                   <div className="feed-group-body">
                     <div className="entry-line group-head">
                       <div className="entry-copy">
-                        <strong>
-                          {es.oneFeed} · {spanLabel(block.feeds, timeZone)}
-                        </strong>
+                        <strong className="entry-time">{spanLabel(block.feeds, timeZone)}</strong>
+                        <div className="chips">
+                          <span className="chip">{groupSides(block.feeds)}</span>
+                          {groupMinutes(block.feeds) ? <span className="chip ok">{es.totalTime(groupMinutes(block.feeds)!)}</span> : null}
+                        </div>
                       </div>
                       <button type="button" className="ghost" onClick={() => onUngroup(block.sessionId)}>
                         {es.ungroup}
@@ -136,17 +138,29 @@ function FeedLine({
       ) : null}
       <FeedIcon />
       <div className="entry-copy">
-        <strong>
+        <strong className="entry-time">
           {start}
           {feed.kind === "bottle" || !feed.ended_at ? "" : `–${toDatetimeLocalValue(feed.ended_at, timeZone).slice(11)}`}
         </strong>
-        <span>
-          {feed.kind === "bottle"
-            ? `${es.bottle} · ${feed.ml} ${es.ml}`
-            : `${feed.side ? sideLabel(feed.side) : ""}${
-                feed.ended_at ? ` · ${formatMinutes(activeMinutes(feed))}` : ` · ${feed.paused_at ? es.paused : es.inProgress}`
-              }`}
-        </span>
+        <div className="chips">
+          {feed.kind === "bottle" ? (
+            <>
+              <span className="chip">{es.bottle}</span>
+              <span className="chip ok">
+                {feed.ml} {es.ml}
+              </span>
+            </>
+          ) : (
+            <>
+              {feed.side ? <span className="chip">{sideLabel(feed.side)}</span> : null}
+              {feed.ended_at ? (
+                <span className="chip ok">{formatMinutes(activeMinutes(feed))}</span>
+              ) : (
+                <span className="chip accent">{feed.paused_at ? es.paused : es.inProgress}</span>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -158,4 +172,18 @@ function spanLabel(feeds: Feed[], timeZone: string): string {
   const last = ordered[ordered.length - 1];
   if (!last.ended_at) return start;
   return `${start}–${toDatetimeLocalValue(last.ended_at, timeZone).slice(11)}`;
+}
+
+function groupSides(feeds: Feed[]): string {
+  const sides: ("left" | "right" | "both")[] = [];
+  for (const feed of [...feeds].sort((left, right) => left.started_at.localeCompare(right.started_at))) {
+    if (feed.side && !sides.includes(feed.side)) sides.push(feed.side);
+  }
+  return sides.map(sideLabel).join(" + ");
+}
+
+function groupMinutes(feeds: Feed[]): string | null {
+  const finished = feeds.filter((feed) => feed.ended_at !== null);
+  if (finished.length === 0) return null;
+  return formatMinutes(finished.reduce((total, feed) => total + activeMinutes(feed), 0));
 }

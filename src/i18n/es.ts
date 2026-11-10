@@ -133,6 +133,9 @@ export const es = {
   yesterday: "ayer",
   dayBeforeYesterday: "anteayer",
   agoPrefix: "Hace",
+  diaperBoth: "Pis y caca",
+  editShort: "Corregir",
+  deleteShort: "Borrar",
   agoLessThanMinute: "Hace menos de 1 minuto",
   agoMinutes: (minutes: number) => (minutes === 1 ? "Hace 1 minuto" : `Hace ${minutes} minutos`),
   agoHours: (hours: number, minutes: number) => {
@@ -290,5 +293,5 @@ export function sideLabel(side: "left" | "right" | "both"): string {
 export function diaperLabel(kind: "pee" | "poop" | "both"): string {
   if (kind === "pee") return es.pee;
   if (kind === "poop") return es.poop;
-  return es.both;
+  return es.diaperBoth;
 }

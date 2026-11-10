@@ -827,3 +827,72 @@ input:focus-visible, select:focus-visible, button:focus-visible {
 }
 
 .chip { white-space: nowrap; }
+
+/* Listas de tomas y pañales */
+.entries > li {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.entries.plain > li { border-left: 0; border-right: 0; border-bottom: 0; }
+.entries.plain > li:first-child { border-top: 0; }
+
+.entries .entry-line { align-items: flex-start; }
+
+.entries .entry-line > .event-icon {
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.entry-time {
+  font-size: 1.05rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.entries .entry-copy { gap: 6px; }
+
+.entries .row-actions { padding-left: 44px; }
+.entries.plain .item-body .row-actions,
+.entries .item-body .row-actions,
+.entries .feed-group .row-actions { padding-left: 0; }
+
+.feed-group .group-head {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.feed-group .group-head button.ghost {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.feed-group .nested {
+  margin-top: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+  display: grid;
+  gap: 12px;
+}
+
+.feed-group .nested li { padding: 0; }
+.feed-group .nested .row-actions { padding-left: 44px; }
+
+/* Medicamentos: Dar a lo ancho, el resto en una fila */
+.med-actions { display: flex; flex-wrap: wrap; }
+
+.med-actions .med-give { flex: 1 0 100%; }
+
+.med-actions button:not(.med-give) { flex: 1 1 0; padding: 0 8px; }
+
+.feed-group .group-head { flex-wrap: wrap; row-gap: 10px; }
+.feed-group .group-head .entry-copy { flex: 1 1 200px; }
+.entries .row-actions.med-actions { padding-left: 0; }
